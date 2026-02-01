@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * AoE (Area of Effect) types supported by the system.
  */
-export type AoEShape = 'circle' | 'line'
+export type AoEShape = 'circle' | 'line' | 'cone'
 
 /**
  * Configuration for spawning an AoE.
@@ -15,7 +15,8 @@ export interface AoEConfig {
   radius?: number // for circle: the radius
   length?: number // for line: length of the line
   width?: number // for line: width of the line
-  rotation?: number // for line: rotation in radians (0 = pointing +Z)
+  rotation?: number // for line/cone: rotation in radians (0 = pointing +Z)
+  angle?: number // for cone: angle of the cone in radians (full width)
   telegraphDuration: number // how long the telegraph shows before resolving (seconds)
   onResolve?: () => void // callback when AoE resolves (for damage checks)
 }
@@ -102,6 +103,27 @@ export class AoEManager {
         mesh.rotation.z = rotation
         break
       }
+      case 'cone': {
+        const coneRadius = config.radius!
+        const coneAngle = config.angle!
+        const rotation = config.rotation ?? 0
+        // CircleSectorGeometry: create a pie-slice shape
+        // thetaStart and thetaLength define the arc
+        // We center the cone on the rotation angle
+        const segments = 32
+        geometry = new THREE.CircleGeometry(
+          coneRadius,
+          segments,
+          -coneAngle / 2, // thetaStart: offset by half the angle to center
+          coneAngle // thetaLength: the cone's angular width
+        )
+        mesh = new THREE.Mesh(geometry, material)
+        mesh.position.set(config.position.x, 0.01, config.position.z)
+        // Rotate to lay flat on XZ plane, then apply direction rotation around Y
+        mesh.rotation.x = -Math.PI / 2
+        mesh.rotation.z = rotation
+        break
+      }
       default:
         throw new Error(`Unknown AoE shape: ${config.shape}`)
     }
@@ -181,6 +203,25 @@ export class AoEManager {
         const halfWidth = config.width! / 2
         const halfLength = config.length! / 2
         return Math.abs(localX) <= halfWidth && Math.abs(localZ) <= halfLength
+      }
+      case 'cone': {
+        const dx = playerPosition.x - config.position.x
+        const dz = playerPosition.z - config.position.z
+        const distanceSquared = dx * dx + dz * dz
+        // Check if within radius
+        if (distanceSquared > config.radius! * config.radius!) {
+          return false
+        }
+        // Check if within angle
+        // Get angle from cone origin to player
+        const playerAngle = Math.atan2(dx, dz) // angle in XZ plane (0 = +Z)
+        const coneRotation = config.rotation ?? 0
+        // Normalize the angular difference to [-PI, PI]
+        let angleDiff = playerAngle - coneRotation
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+        // Check if within half-angle of cone
+        return Math.abs(angleDiff) <= config.angle! / 2
       }
       default:
         return false

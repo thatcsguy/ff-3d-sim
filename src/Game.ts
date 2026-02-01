@@ -220,6 +220,26 @@ export class Game {
       },
     })
 
+    // Test cone AoE (Apocalyptic Ray from Brute Justice)
+    this.timeline.addEvent({
+      id: 'test-cone-aoe-1',
+      time: 7.0,
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'cone-aoe-1',
+          shape: 'cone',
+          position: new THREE.Vector3(0, 0, -10), // From BJ position
+          radius: 15, // Large cone reaching across arena
+          angle: Math.PI / 3, // 60 degree cone
+          rotation: Math.PI, // Pointing south
+          telegraphDuration: 2.0,
+          onResolve: () => {
+            console.log('Apocalyptic Ray resolved!')
+          },
+        })
+      },
+    })
+
     // Test Alexander Prime spawn (Sacrament position)
     this.timeline.addEvent({
       id: 'test-alex-spawn',
