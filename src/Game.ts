@@ -205,6 +205,21 @@ export class Game {
       },
     })
 
+    // Test Brute Justice spawn (Super Jump source position)
+    this.timeline.addEvent({
+      id: 'test-bj-spawn',
+      time: 6.0,
+      handler: () => {
+        // Show Brute Justice at north side of arena
+        this.bossManager.show(
+          'bruteJustice',
+          new THREE.Vector3(0, 0, -10)
+        )
+        // Face south (toward center)
+        this.bossManager.setRotation('bruteJustice', Math.PI)
+      },
+    })
+
     // Start the timeline automatically for testing
     this.timeline.start()
   }
