@@ -112,12 +112,10 @@ export class Game {
   }
 
   private applySettings(): void {
-    // Character screen position: 0 = bottom (look up), 1 = top (look down)
-    // Map 0-1 slider to vertical offset: 0.5 = no offset
-    // Range: -5 to +5 meters offset
-    const screenPosition = this.settingsMenu.getCharacterScreenPosition()
-    const offset = (0.5 - screenPosition) * 10
-    this.cameraController.setTargetVerticalOffset(offset)
+    // Character screen position: 0 = bottom, 1 = top, 0.5 = center
+    // Passed directly to camera controller which uses FOV math to maintain
+    // consistent screen position regardless of zoom level
+    this.cameraController.setTargetScreenY(this.settingsMenu.getCharacterScreenPosition())
   }
 
   private gameLoop = (time: number): void => {
@@ -143,8 +141,10 @@ export class Game {
     this.npcManager.update(deltaTime)
 
     // Update camera to orbit around player (follow jumping)
+    // Target 75% up from player's feet (upper chest/neck area)
     const playerPosition = this.playerMesh.position.clone()
-    playerPosition.y += PLAYER_HEIGHT / 2 // Look at player's head height
+    const playerBottom = this.playerMesh.position.y - PLAYER_HEIGHT / 2
+    playerPosition.y = playerBottom + PLAYER_HEIGHT * 0.75
     this.cameraController.update(deltaTime, playerPosition)
 
     // Update HUD

@@ -22,7 +22,7 @@ export class CameraController {
   private yaw: number = 0 // Horizontal rotation in radians
   private pitch: number = 0.5 // Vertical rotation in radians (start slightly elevated)
   private zoom: number = CAMERA_DEFAULT_ZOOM
-  private targetVerticalOffset: number = 0 // Extra vertical offset for target position
+  private targetScreenY: number = 0.5 // Where player appears on screen (0=bottom, 1=top, 0.5=center)
 
   constructor(camera: THREE.PerspectiveCamera, inputManager: InputManager) {
     this.camera = camera
@@ -107,9 +107,13 @@ export class CameraController {
     const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw))
     const screenUp = new THREE.Vector3().crossVectors(right, viewDir).normalize()
 
-    // Offset lookAt point in screen-up direction
-    // Positive offset = look above player = player appears lower on screen
-    const lookAtPoint = targetPosition.clone().addScaledVector(screenUp, this.targetVerticalOffset)
+    // Compute world-space offset needed to place player at targetScreenY on screen
+    // Using FOV projection math: visible height at distance d = 2 * d * tan(FOV/2)
+    const fovRadians = this.camera.fov * (Math.PI / 180)
+    const halfVerticalExtent = effectiveZoom * Math.tan(fovRadians / 2)
+    // (0.5 - targetScreenY): positive when player should be at bottom, negative when at top
+    const scaledOffset = (0.5 - this.targetScreenY) * 2 * halfVerticalExtent
+    const lookAtPoint = targetPosition.clone().addScaledVector(screenUp, scaledOffset)
     this.camera.lookAt(lookAtPoint)
   }
 
@@ -136,8 +140,8 @@ export class CameraController {
     return this.zoom
   }
 
-  setTargetVerticalOffset(offset: number): void {
-    this.targetVerticalOffset = offset
+  setTargetScreenY(screenY: number): void {
+    this.targetScreenY = screenY
   }
 
   dispose(): void {
