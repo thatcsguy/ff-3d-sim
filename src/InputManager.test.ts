@@ -170,5 +170,28 @@ describe('InputManager', () => {
       expect(stick.x).toBe(0)
       expect(stick.y).toBe(0)
     })
+
+    it('returns zero right stick input when no gamepad connected', () => {
+      const stick = inputManager.getRightStick()
+      expect(stick.x).toBe(0)
+      expect(stick.y).toBe(0)
+    })
+
+    it('reads right stick values from connected gamepad', () => {
+      const mockGamepad = {
+        index: 0,
+        axes: [0, 0, 0.3, -0.6],
+      } as unknown as Gamepad
+
+      Object.defineProperty(navigator, 'getGamepads', {
+        value: () => [mockGamepad, null, null, null],
+        configurable: true,
+      })
+
+      window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+      const stick = inputManager.getRightStick()
+      expect(stick.x).toBe(0.3)
+      expect(stick.y).toBe(-0.6)
+    })
   })
 })

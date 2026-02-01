@@ -11,6 +11,8 @@ import {
 
 const ROTATION_SENSITIVITY = 0.003
 const ZOOM_SENSITIVITY = 1.5
+const GAMEPAD_ROTATION_SPEED = 2.5 // radians per second at full stick deflection
+const STICK_DEADZONE = 0.1
 
 export class CameraController {
   private camera: THREE.PerspectiveCamera
@@ -35,7 +37,7 @@ export class CameraController {
     this.zoom = Math.max(CAMERA_MIN_ZOOM, Math.min(CAMERA_MAX_ZOOM, this.zoom + delta))
   }
 
-  update(_deltaTime: number, targetPosition: THREE.Vector3): void {
+  update(deltaTime: number, targetPosition: THREE.Vector3): void {
     // Only rotate camera when right-click or left-click is held
     if (
       this.inputManager.isMouseButtonDown(MouseButton.Right) ||
@@ -48,6 +50,14 @@ export class CameraController {
     }
 
     this.inputManager.resetMouseDelta()
+
+    // Gamepad right stick camera rotation
+    const rightStick = this.inputManager.getRightStick()
+    if (Math.abs(rightStick.x) > STICK_DEADZONE || Math.abs(rightStick.y) > STICK_DEADZONE) {
+      this.yaw -= rightStick.x * GAMEPAD_ROTATION_SPEED * deltaTime
+      this.pitch += rightStick.y * GAMEPAD_ROTATION_SPEED * deltaTime
+      this.pitch = Math.max(CAMERA_MIN_PITCH, Math.min(CAMERA_MAX_PITCH, this.pitch))
+    }
 
     // Calculate camera position in spherical coordinates around target
     // Apply floor collision: reduce effective zoom if camera would go below floor

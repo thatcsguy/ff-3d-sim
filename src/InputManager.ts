@@ -111,6 +111,17 @@ export class InputManager {
     return { x: gamepad.axes[0] ?? 0, y: gamepad.axes[1] ?? 0 }
   }
 
+  getRightStick(): StickInput {
+    if (!this.gamepad.connected) {
+      return { x: 0, y: 0 }
+    }
+    const gamepad = navigator.getGamepads()[this.gamepad.index]
+    if (!gamepad) {
+      return { x: 0, y: 0 }
+    }
+    return { x: gamepad.axes[2] ?? 0, y: gamepad.axes[3] ?? 0 }
+  }
+
   isKeyDown(code: string): boolean {
     return this.keys.has(code)
   }
