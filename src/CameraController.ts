@@ -42,7 +42,7 @@ export class CameraController {
     ) {
       const delta = this.inputManager.getMouseDelta()
       this.yaw -= delta.x * ROTATION_SENSITIVITY
-      this.pitch -= delta.y * ROTATION_SENSITIVITY
+      this.pitch += delta.y * ROTATION_SENSITIVITY
       this.pitch = Math.max(CAMERA_MIN_PITCH, Math.min(CAMERA_MAX_PITCH, this.pitch))
     }
 
