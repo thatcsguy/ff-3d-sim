@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * AoE (Area of Effect) types supported by the system.
  */
-export type AoEShape = 'circle'
+export type AoEShape = 'circle' | 'line'
 
 /**
  * Configuration for spawning an AoE.
@@ -12,7 +12,10 @@ export interface AoEConfig {
   id: string
   shape: AoEShape
   position: THREE.Vector3 // center position (Y is ignored, placed on ground)
-  radius: number // for circle: the radius
+  radius?: number // for circle: the radius
+  length?: number // for line: length of the line
+  width?: number // for line: width of the line
+  rotation?: number // for line: rotation in radians (0 = pointing +Z)
   telegraphDuration: number // how long the telegraph shows before resolving (seconds)
   onResolve?: () => void // callback when AoE resolves (for damage checks)
 }
@@ -70,14 +73,6 @@ export class AoEManager {
     let geometry: THREE.BufferGeometry
     let mesh: THREE.Mesh
 
-    switch (config.shape) {
-      case 'circle':
-        geometry = new THREE.CircleGeometry(config.radius, 32)
-        break
-      default:
-        throw new Error(`Unknown AoE shape: ${config.shape}`)
-    }
-
     const material = new THREE.MeshBasicMaterial({
       color: TELEGRAPH_COLOR,
       transparent: true,
@@ -86,11 +81,30 @@ export class AoEManager {
       depthWrite: false, // prevent z-fighting with arena floor
     })
 
-    mesh = new THREE.Mesh(geometry, material)
-    // Position on ground plane, slightly above to prevent z-fighting
-    mesh.position.set(config.position.x, 0.01, config.position.z)
-    // Rotate to lay flat on XZ plane
-    mesh.rotation.x = -Math.PI / 2
+    switch (config.shape) {
+      case 'circle':
+        geometry = new THREE.CircleGeometry(config.radius!, 32)
+        mesh = new THREE.Mesh(geometry, material)
+        mesh.position.set(config.position.x, 0.01, config.position.z)
+        mesh.rotation.x = -Math.PI / 2
+        break
+      case 'line': {
+        const length = config.length!
+        const width = config.width!
+        const rotation = config.rotation ?? 0
+        // PlaneGeometry: width along X, height along Y (before rotation)
+        // We want length along the line direction, width perpendicular
+        geometry = new THREE.PlaneGeometry(width, length)
+        mesh = new THREE.Mesh(geometry, material)
+        mesh.position.set(config.position.x, 0.01, config.position.z)
+        // Rotate to lay flat on XZ plane, then apply direction rotation around Y
+        mesh.rotation.x = -Math.PI / 2
+        mesh.rotation.z = rotation
+        break
+      }
+      default:
+        throw new Error(`Unknown AoE shape: ${config.shape}`)
+    }
 
     return mesh
   }
@@ -151,7 +165,22 @@ export class AoEManager {
         const dx = playerPosition.x - config.position.x
         const dz = playerPosition.z - config.position.z
         const distanceSquared = dx * dx + dz * dz
-        return distanceSquared <= config.radius * config.radius
+        return distanceSquared <= config.radius! * config.radius!
+      }
+      case 'line': {
+        // Transform player position to AoE local space (rotate around center)
+        const dx = playerPosition.x - config.position.x
+        const dz = playerPosition.z - config.position.z
+        const rotation = config.rotation ?? 0
+        // Rotate point by -rotation to align with AoE local axes
+        const cos = Math.cos(-rotation)
+        const sin = Math.sin(-rotation)
+        const localX = dx * cos - dz * sin
+        const localZ = dx * sin + dz * cos
+        // Check if point is within the axis-aligned rectangle
+        const halfWidth = config.width! / 2
+        const halfLength = config.length! / 2
+        return Math.abs(localX) <= halfWidth && Math.abs(localZ) <= halfLength
       }
       default:
         return false

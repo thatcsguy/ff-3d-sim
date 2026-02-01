@@ -130,7 +130,27 @@ export class Game {
           radius: 5,
           telegraphDuration: 2.0, // 2 seconds to get out
           onResolve: () => {
-            console.log('AoE resolved!')
+            console.log('Circle AoE resolved!')
+          },
+        })
+      },
+    })
+
+    // Test line AoE (Limit Cut dash style)
+    this.timeline.addEvent({
+      id: 'test-line-aoe-1',
+      time: 3.0, // Spawn after 3 seconds
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'line-aoe-1',
+          shape: 'line',
+          position: new THREE.Vector3(5, 0, 0), // Right side of arena
+          length: 15,
+          width: 2,
+          rotation: Math.PI / 4, // 45 degrees
+          telegraphDuration: 1.5,
+          onResolve: () => {
+            console.log('Line AoE resolved!')
           },
         })
       },
