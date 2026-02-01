@@ -122,6 +122,17 @@ export class InputManager {
     return { x: gamepad.axes[2] ?? 0, y: gamepad.axes[3] ?? 0 }
   }
 
+  isButtonPressed(buttonIndex: number): boolean {
+    if (!this.gamepad.connected) {
+      return false
+    }
+    const gamepad = navigator.getGamepads()[this.gamepad.index]
+    if (!gamepad) {
+      return false
+    }
+    return gamepad.buttons[buttonIndex]?.pressed ?? false
+  }
+
   isKeyDown(code: string): boolean {
     return this.keys.has(code)
   }

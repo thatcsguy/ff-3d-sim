@@ -193,5 +193,41 @@ describe('InputManager', () => {
       expect(stick.x).toBe(0.3)
       expect(stick.y).toBe(-0.6)
     })
+
+    it('returns false for button when no gamepad connected', () => {
+      expect(inputManager.isButtonPressed(3)).toBe(false)
+    })
+
+    it('reads button pressed state from connected gamepad', () => {
+      const mockGamepad = {
+        index: 0,
+        axes: [0, 0, 0, 0],
+        buttons: [
+          { pressed: false, touched: false, value: 0 },
+          { pressed: false, touched: false, value: 0 },
+          { pressed: false, touched: false, value: 0 },
+          { pressed: true, touched: true, value: 1 }, // Triangle
+        ],
+      } as unknown as Gamepad
+
+      Object.defineProperty(navigator, 'getGamepads', {
+        value: () => [mockGamepad, null, null, null],
+        configurable: true,
+      })
+
+      window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+      expect(inputManager.isButtonPressed(3)).toBe(true)
+      expect(inputManager.isButtonPressed(0)).toBe(false)
+    })
+
+    it('returns false for button when gamepad not found in navigator', () => {
+      Object.defineProperty(navigator, 'getGamepads', {
+        value: () => [null, null, null, null],
+        configurable: true,
+      })
+
+      window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+      expect(inputManager.isButtonPressed(3)).toBe(false)
+    })
   })
 })

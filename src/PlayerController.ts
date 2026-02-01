@@ -61,8 +61,9 @@ export class PlayerController {
       this.mesh.position.z += moveDirection.z * PLAYER_SPEED * deltaTime
     }
 
-    // Jump handling
-    if (this.inputManager.isKeyDown('Space') && !this.isJumping) {
+    // Jump handling (Space key or Triangle button on gamepad)
+    const jumpPressed = this.inputManager.isKeyDown('Space') || this.inputManager.isButtonPressed(3)
+    if (jumpPressed && !this.isJumping) {
       this.isJumping = true
       this.velocity.y = JUMP_VELOCITY
     }
