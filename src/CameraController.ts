@@ -20,6 +20,7 @@ export class CameraController {
   private yaw: number = 0 // Horizontal rotation in radians
   private pitch: number = 0.5 // Vertical rotation in radians (start slightly elevated)
   private zoom: number = CAMERA_DEFAULT_ZOOM
+  private targetVerticalOffset: number = 0 // Extra vertical offset for target position
 
   constructor(camera: THREE.PerspectiveCamera, inputManager: InputManager) {
     this.camera = camera
@@ -59,15 +60,19 @@ export class CameraController {
       this.pitch = Math.max(CAMERA_MIN_PITCH, Math.min(CAMERA_MAX_PITCH, this.pitch))
     }
 
+    // Apply vertical offset for character screen position setting
+    const adjustedTarget = targetPosition.clone()
+    adjustedTarget.y += this.targetVerticalOffset
+
     // Calculate camera position in spherical coordinates around target
     // Apply floor collision: reduce effective zoom if camera would go below floor
     let effectiveZoom = this.zoom
     const offsetY = effectiveZoom * Math.sin(this.pitch)
-    const cameraY = targetPosition.y + offsetY
+    const cameraY = adjustedTarget.y + offsetY
 
     if (cameraY < CAMERA_FLOOR_HEIGHT && this.pitch < 0) {
       // Camera would be below floor - calculate max zoom that keeps it above
-      const maxZoomForFloor = (targetPosition.y - CAMERA_FLOOR_HEIGHT) / Math.abs(Math.sin(this.pitch))
+      const maxZoomForFloor = (adjustedTarget.y - CAMERA_FLOOR_HEIGHT) / Math.abs(Math.sin(this.pitch))
       effectiveZoom = Math.max(CAMERA_MIN_ZOOM, Math.min(effectiveZoom, maxZoomForFloor))
     }
 
@@ -76,11 +81,11 @@ export class CameraController {
     const finalOffsetZ = effectiveZoom * Math.cos(this.yaw) * Math.cos(this.pitch)
 
     this.camera.position.set(
-      targetPosition.x + finalOffsetX,
-      Math.max(CAMERA_FLOOR_HEIGHT, targetPosition.y + finalOffsetY),
-      targetPosition.z + finalOffsetZ
+      adjustedTarget.x + finalOffsetX,
+      Math.max(CAMERA_FLOOR_HEIGHT, adjustedTarget.y + finalOffsetY),
+      adjustedTarget.z + finalOffsetZ
     )
-    this.camera.lookAt(targetPosition)
+    this.camera.lookAt(adjustedTarget)
   }
 
   getForwardDirection(): THREE.Vector3 {
@@ -104,6 +109,10 @@ export class CameraController {
 
   getZoom(): number {
     return this.zoom
+  }
+
+  setTargetVerticalOffset(offset: number): void {
+    this.targetVerticalOffset = offset
   }
 
   dispose(): void {

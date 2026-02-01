@@ -82,6 +82,9 @@ export class Game {
 
     // Settings menu setup
     this.settingsMenu = new SettingsMenu()
+    this.settingsMenu.setOnSettingsChange(() => {
+      this.applySettings()
+    })
 
     // Handle window resize
     window.addEventListener('resize', this.onResize)
@@ -91,6 +94,15 @@ export class Game {
     this.camera.aspect = window.innerWidth / window.innerHeight
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(window.innerWidth, window.innerHeight)
+  }
+
+  private applySettings(): void {
+    // Character screen position: 0 = bottom (look up), 1 = top (look down)
+    // Map 0-1 slider to vertical offset: 0.5 = no offset
+    // Range: -5 to +5 meters offset
+    const screenPosition = this.settingsMenu.getCharacterScreenPosition()
+    const offset = (screenPosition - 0.5) * 10
+    this.cameraController.setTargetVerticalOffset(offset)
   }
 
   private gameLoop = (time: number): void => {
