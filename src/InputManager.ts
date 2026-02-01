@@ -9,6 +9,11 @@ export interface GamepadState {
   index: number
 }
 
+export interface StickInput {
+  x: number
+  y: number
+}
+
 export interface MouseDelta {
   x: number
   y: number
@@ -93,6 +98,17 @@ export class InputManager {
 
   isGamepadConnected(): boolean {
     return this.gamepad.connected
+  }
+
+  getLeftStick(): StickInput {
+    if (!this.gamepad.connected) {
+      return { x: 0, y: 0 }
+    }
+    const gamepad = navigator.getGamepads()[this.gamepad.index]
+    if (!gamepad) {
+      return { x: 0, y: 0 }
+    }
+    return { x: gamepad.axes[0] ?? 0, y: gamepad.axes[1] ?? 0 }
   }
 
   isKeyDown(code: string): boolean {

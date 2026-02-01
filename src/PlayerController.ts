@@ -39,6 +39,13 @@ export class PlayerController {
       moveDirection.add(right)
     }
 
+    // Gamepad left stick movement
+    const leftStick = this.inputManager.getLeftStick()
+    if (Math.abs(leftStick.x) > 0.1 || Math.abs(leftStick.y) > 0.1) {
+      moveDirection.addScaledVector(right, leftStick.x)
+      moveDirection.addScaledVector(forward, -leftStick.y)
+    }
+
     // Both mouse buttons = move forward
     if (
       this.inputManager.isMouseButtonDown(MouseButton.Left) &&
