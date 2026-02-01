@@ -436,6 +436,38 @@ export class Game {
       },
     })
 
+    // Spawn first puddles (west and east)
+    this.timeline.addEvent({
+      id: 'puddle-spawn-1',
+      time: 6.8,
+      handler: () => {
+        // West puddle (soaked by 5)
+        this.aoeManager.spawn({
+          id: 'puddle-1-west',
+          shape: 'puddle',
+          position: new THREE.Vector3(-12, 0, 0),
+          soakRadius: 2.5,
+          soakCount: 1,
+          telegraphDuration: 3.0,
+          onResolve: () => {
+            console.log('Puddle 1 west resolved')
+          },
+        })
+        // East puddle (soaked by 6)
+        this.aoeManager.spawn({
+          id: 'puddle-1-east',
+          shape: 'puddle',
+          position: new THREE.Vector3(12, 0, 0),
+          soakRadius: 2.5,
+          soakCount: 1,
+          telegraphDuration: 3.0,
+          onResolve: () => {
+            console.log('Puddle 1 east resolved')
+          },
+        })
+      },
+    })
+
     // First puddle soak (5/6)
     this.timeline.addEvent({
       id: 'phase-puddle-1',
@@ -519,6 +551,38 @@ export class Game {
       },
     })
 
+    // Spawn second puddles
+    this.timeline.addEvent({
+      id: 'puddle-spawn-2',
+      time: 11.8,
+      handler: () => {
+        // West puddle (soaked by 7)
+        this.aoeManager.spawn({
+          id: 'puddle-2-west',
+          shape: 'puddle',
+          position: new THREE.Vector3(-12, 0, 0),
+          soakRadius: 2.5,
+          soakCount: 1,
+          telegraphDuration: 3.0,
+          onResolve: () => {
+            console.log('Puddle 2 west resolved')
+          },
+        })
+        // East puddle (soaked by 8)
+        this.aoeManager.spawn({
+          id: 'puddle-2-east',
+          shape: 'puddle',
+          position: new THREE.Vector3(12, 0, 0),
+          soakRadius: 2.5,
+          soakCount: 1,
+          telegraphDuration: 3.0,
+          onResolve: () => {
+            console.log('Puddle 2 east resolved')
+          },
+        })
+      },
+    })
+
     // Second puddle soak (7/8)
     this.timeline.addEvent({
       id: 'phase-puddle-2',
@@ -554,6 +618,38 @@ export class Game {
               'cruiseChaser',
               new THREE.Vector3(10, 0, -8)
             )
+          },
+        })
+      },
+    })
+
+    // Spawn third puddles
+    this.timeline.addEvent({
+      id: 'puddle-spawn-3',
+      time: 15.8,
+      handler: () => {
+        // West puddle (soaked by 1)
+        this.aoeManager.spawn({
+          id: 'puddle-3-west',
+          shape: 'puddle',
+          position: new THREE.Vector3(-12, 0, 0),
+          soakRadius: 2.5,
+          soakCount: 1,
+          telegraphDuration: 3.0,
+          onResolve: () => {
+            console.log('Puddle 3 west resolved')
+          },
+        })
+        // East puddle (soaked by 2)
+        this.aoeManager.spawn({
+          id: 'puddle-3-east',
+          shape: 'puddle',
+          position: new THREE.Vector3(12, 0, 0),
+          soakRadius: 2.5,
+          soakCount: 1,
+          telegraphDuration: 3.0,
+          onResolve: () => {
+            console.log('Puddle 3 east resolved')
           },
         })
       },

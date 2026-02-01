@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * AoE (Area of Effect) types supported by the system.
  */
-export type AoEShape = 'circle' | 'line' | 'cone' | 'tshape'
+export type AoEShape = 'circle' | 'line' | 'cone' | 'tshape' | 'puddle'
 
 /**
  * Configuration for spawning an AoE.
@@ -22,6 +22,10 @@ export interface AoEConfig {
   barLength?: number // for tshape: length of the horizontal bar
   barWidth?: number // for tshape: width of the horizontal bar
   telegraphDuration: number // how long the telegraph shows before resolving (seconds)
+  // Puddle-specific options
+  soakRadius?: number // for puddle: initial radius
+  soakCount?: number // for puddle: number of soaks required to fully shrink
+  shrinkRate?: number // for puddle: how fast the puddle shrinks per soak (default: 1/soakCount)
   onResolve?: () => void // callback when AoE resolves (for damage checks)
 }
 
@@ -33,11 +37,19 @@ interface ActiveAoE {
   mesh: THREE.Mesh
   elapsedTime: number
   resolved: boolean
+  // Puddle-specific state
+  currentSoaks?: number // number of times soaked
+  currentRadius?: number // current radius (shrinks with soaks)
+  isBeingSoaked?: boolean // whether player is currently in puddle
 }
 
 // FFXIV-style orange color for telegraphs
 const TELEGRAPH_COLOR = 0xf5a623
 const TELEGRAPH_OPACITY = 0.5
+
+// Puddle colors (purple for Void of Repentance)
+const PUDDLE_COLOR = 0x9b59b6
+const PUDDLE_OPACITY = 0.6
 
 /**
  * Manages AoE telegraphs and their lifecycle.
@@ -63,12 +75,21 @@ export class AoEManager {
     const mesh = this.createMesh(config)
     this.scene.add(mesh)
 
-    this.activeAoEs.set(config.id, {
+    const aoe: ActiveAoE = {
       config,
       mesh,
       elapsedTime: 0,
       resolved: false,
-    })
+    }
+
+    // Initialize puddle-specific state
+    if (config.shape === 'puddle') {
+      aoe.currentSoaks = 0
+      aoe.currentRadius = config.soakRadius ?? config.radius ?? 2
+      aoe.isBeingSoaked = false
+    }
+
+    this.activeAoEs.set(config.id, aoe)
   }
 
   /**
@@ -165,6 +186,22 @@ export class AoEManager {
         // Group extends Object3D just like Mesh, and we handle disposal specially)
         return group as unknown as THREE.Mesh
       }
+      case 'puddle': {
+        // Puddle: shrinking circle for Void of Repentance soaks
+        const puddleRadius = config.soakRadius ?? config.radius ?? 2
+        const puddleMaterial = new THREE.MeshBasicMaterial({
+          color: PUDDLE_COLOR,
+          transparent: true,
+          opacity: PUDDLE_OPACITY,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        })
+        geometry = new THREE.CircleGeometry(puddleRadius, 32)
+        mesh = new THREE.Mesh(geometry, puddleMaterial)
+        mesh.position.set(config.position.x, 0.01, config.position.z)
+        mesh.rotation.x = -Math.PI / 2
+        return mesh
+      }
       default:
         throw new Error(`Unknown AoE shape: ${config.shape}`)
     }
@@ -183,6 +220,12 @@ export class AoEManager {
 
     for (const [id, aoe] of this.activeAoEs) {
       aoe.elapsedTime += deltaTime
+
+      // Handle puddle soaking separately from regular AoE resolution
+      if (aoe.config.shape === 'puddle') {
+        this.updatePuddle(aoe, deltaTime, playerPosition)
+        continue
+      }
 
       // Check if it's time to resolve
       if (!aoe.resolved && aoe.elapsedTime >= aoe.config.telegraphDuration) {
@@ -207,6 +250,75 @@ export class AoEManager {
     }
 
     return hits
+  }
+
+  /**
+   * Update puddle AoE - handles soaking and shrinking.
+   * Puddles shrink as players stand in them.
+   */
+  private updatePuddle(
+    aoe: ActiveAoE,
+    deltaTime: number,
+    playerPosition: THREE.Vector3
+  ): void {
+    if (aoe.resolved) return
+
+    const soakCount = aoe.config.soakCount ?? 3
+    const initialRadius = aoe.config.soakRadius ?? aoe.config.radius ?? 2
+    const shrinkRate = aoe.config.shrinkRate ?? 1 / soakCount
+
+    // Check if player is in the puddle using current radius
+    const dx = playerPosition.x - aoe.config.position.x
+    const dz = playerPosition.z - aoe.config.position.z
+    const distanceSquared = dx * dx + dz * dz
+    const currentRadius = aoe.currentRadius ?? initialRadius
+    const isInPuddle = distanceSquared <= currentRadius * currentRadius
+
+    if (isInPuddle) {
+      // Player is soaking - shrink the puddle over time
+      // Shrink continuously while player is inside
+      const shrinkSpeed = shrinkRate * 2 // Shrink one soak worth every 0.5s
+      aoe.currentRadius = Math.max(0, currentRadius - shrinkSpeed * deltaTime * initialRadius)
+
+      // Update the mesh scale to match current radius
+      const scale = aoe.currentRadius / initialRadius
+      aoe.mesh.scale.set(scale, scale, 1)
+
+      // Visual feedback: brighten while soaking
+      const material = aoe.mesh.material as THREE.MeshBasicMaterial
+      material.opacity = PUDDLE_OPACITY + 0.2
+
+      // Check if fully soaked
+      if (aoe.currentRadius <= 0.1) {
+        aoe.resolved = true
+        // Success flash (green) for proper soak
+        material.color.setHex(0x2ecc71)
+        material.opacity = 0.8
+        if (aoe.config.onResolve) {
+          aoe.config.onResolve()
+        }
+        setTimeout(() => this.remove(aoe.config.id), 200)
+      }
+    } else {
+      // Player not in puddle - reset visual
+      const material = aoe.mesh.material as THREE.MeshBasicMaterial
+      material.opacity = PUDDLE_OPACITY
+    }
+
+    // Check if puddle duration expired without being soaked
+    if (aoe.elapsedTime >= aoe.config.telegraphDuration && !aoe.resolved) {
+      aoe.resolved = true
+      // Failure flash (red) for missed soak
+      const material = aoe.mesh.material as THREE.MeshBasicMaterial
+      material.color.setHex(0xe74c3c)
+      material.opacity = 0.8
+      // Note: For now, missing a puddle soak doesn't count as a hit
+      // In the real mechanic, someone else might soak it
+      if (aoe.config.onResolve) {
+        aoe.config.onResolve()
+      }
+      setTimeout(() => this.remove(aoe.config.id), 200)
+    }
   }
 
   /**
@@ -306,6 +418,14 @@ export class AoEManager {
           localZ <= stemLength + barWidth / 2
 
         return inStem || inBar
+      }
+      case 'puddle': {
+        // Puddle uses same collision as circle but with current radius
+        const dx = playerPosition.x - config.position.x
+        const dz = playerPosition.z - config.position.z
+        const distanceSquared = dx * dx + dz * dz
+        const puddleRadius = config.soakRadius ?? config.radius ?? 2
+        return distanceSquared <= puddleRadius * puddleRadius
       }
       default:
         return false
