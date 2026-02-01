@@ -14,6 +14,7 @@ export class InputManager {
   private mouseButtons: Set<MouseButton> = new Set()
   private mouseDelta: MouseDelta = { x: 0, y: 0 }
   private element: HTMLElement
+  private isPointerLocked: boolean = false
 
   constructor(element: HTMLElement = document.body) {
     this.element = element
@@ -27,6 +28,7 @@ export class InputManager {
     window.addEventListener('mouseup', this.onMouseUp)
     this.element.addEventListener('mousemove', this.onMouseMove)
     this.element.addEventListener('contextmenu', this.onContextMenu)
+    document.addEventListener('pointerlockchange', this.onPointerLockChange)
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -39,10 +41,25 @@ export class InputManager {
 
   private onMouseDown = (event: MouseEvent): void => {
     this.mouseButtons.add(event.button as MouseButton)
+    if (
+      (event.button === MouseButton.Left || event.button === MouseButton.Right) &&
+      !this.isPointerLocked &&
+      this.element.requestPointerLock
+    ) {
+      this.element.requestPointerLock()
+    }
   }
 
   private onMouseUp = (event: MouseEvent): void => {
     this.mouseButtons.delete(event.button as MouseButton)
+    if (
+      this.isPointerLocked &&
+      !this.mouseButtons.has(MouseButton.Left) &&
+      !this.mouseButtons.has(MouseButton.Right) &&
+      document.exitPointerLock
+    ) {
+      document.exitPointerLock()
+    }
   }
 
   private onMouseMove = (event: MouseEvent): void => {
@@ -52,6 +69,10 @@ export class InputManager {
 
   private onContextMenu = (event: Event): void => {
     event.preventDefault()
+  }
+
+  private onPointerLockChange = (): void => {
+    this.isPointerLocked = document.pointerLockElement === this.element
   }
 
   isKeyDown(code: string): boolean {
@@ -78,5 +99,9 @@ export class InputManager {
     window.removeEventListener('mouseup', this.onMouseUp)
     this.element.removeEventListener('mousemove', this.onMouseMove)
     this.element.removeEventListener('contextmenu', this.onContextMenu)
+    document.removeEventListener('pointerlockchange', this.onPointerLockChange)
+    if (this.isPointerLocked && document.exitPointerLock) {
+      document.exitPointerLock()
+    }
   }
 }
