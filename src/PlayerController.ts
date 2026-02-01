@@ -11,6 +11,7 @@ export class PlayerController {
   private inputManager: InputManager
   private velocity: THREE.Vector3 = new THREE.Vector3()
   private isJumping: boolean = false
+  private jumpHorizontalVelocity: THREE.Vector3 = new THREE.Vector3()
 
   constructor(mesh: THREE.Mesh, inputManager: InputManager) {
     this.mesh = mesh
@@ -54,11 +55,15 @@ export class PlayerController {
       moveDirection.add(forward)
     }
 
-    // Normalize and apply speed
+    // Calculate horizontal velocity from input
+    const inputHorizontalVelocity = new THREE.Vector3()
     if (moveDirection.lengthSq() > 0) {
       moveDirection.normalize()
-      this.mesh.position.x += moveDirection.x * PLAYER_SPEED * deltaTime
-      this.mesh.position.z += moveDirection.z * PLAYER_SPEED * deltaTime
+      inputHorizontalVelocity.set(
+        moveDirection.x * PLAYER_SPEED,
+        0,
+        moveDirection.z * PLAYER_SPEED
+      )
     }
 
     // Jump handling (Space key or Triangle button on gamepad)
@@ -66,6 +71,19 @@ export class PlayerController {
     if (jumpPressed && !this.isJumping) {
       this.isJumping = true
       this.velocity.y = JUMP_VELOCITY
+      // Snapshot horizontal velocity at jump start
+      this.jumpHorizontalVelocity.copy(inputHorizontalVelocity)
+    }
+
+    // Apply horizontal movement
+    if (this.isJumping) {
+      // Use snapshotted velocity while in air
+      this.mesh.position.x += this.jumpHorizontalVelocity.x * deltaTime
+      this.mesh.position.z += this.jumpHorizontalVelocity.z * deltaTime
+    } else {
+      // Use input velocity while on ground
+      this.mesh.position.x += inputHorizontalVelocity.x * deltaTime
+      this.mesh.position.z += inputHorizontalVelocity.z * deltaTime
     }
 
     if (this.isJumping) {
@@ -79,6 +97,7 @@ export class PlayerController {
         this.mesh.position.y = groundY
         this.velocity.y = 0
         this.isJumping = false
+        this.jumpHorizontalVelocity.set(0, 0, 0)
       }
     }
   }

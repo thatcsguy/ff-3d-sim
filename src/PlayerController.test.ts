@@ -219,15 +219,70 @@ describe('PlayerController', () => {
       expect(playerController.isInAir()).toBe(false)
     })
 
-    it('can move horizontally while jumping', () => {
+    it('can move horizontally while jumping if moving when jump starts', () => {
       const initialX = mesh.position.x
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }))
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }))
 
       playerController.update(0.1, cameraController)
 
       expect(mesh.position.y).toBeGreaterThan(PLAYER_HEIGHT / 2)
       expect(mesh.position.x).toBeGreaterThan(initialX)
+    })
+
+    it('snapshots velocity at jump start - cannot change direction mid-air', () => {
+      // Start moving right and jump
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }))
+      playerController.update(0.1, cameraController)
+
+      const posAfterJump = mesh.position.clone()
+
+      // Release D and press A (try to change direction mid-air)
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD' }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA' }))
+      playerController.update(0.1, cameraController)
+
+      // Should still be moving right (positive X), not left
+      expect(mesh.position.x).toBeGreaterThan(posAfterJump.x)
+    })
+
+    it('snapshots velocity at jump start - stationary jump stays stationary', () => {
+      // Jump without moving
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }))
+      playerController.update(0.1, cameraController)
+
+      const posAfterJump = mesh.position.clone()
+
+      // Try to move mid-air
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }))
+      playerController.update(0.1, cameraController)
+
+      // X position should not change (jumped with no horizontal velocity)
+      expect(mesh.position.x).toBe(posAfterJump.x)
+    })
+
+    it('can move again after landing from stationary jump', () => {
+      // Jump without moving
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }))
+      playerController.update(0.016, cameraController)
+
+      // Release space and wait to land
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }))
+      for (let i = 0; i < 200; i++) {
+        playerController.update(0.016, cameraController)
+      }
+
+      // Should be on ground now
+      expect(playerController.isInAir()).toBe(false)
+      const posOnGround = mesh.position.clone()
+
+      // Now try to move right
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }))
+      playerController.update(0.1, cameraController)
+
+      // Should be able to move again
+      expect(mesh.position.x).toBeGreaterThan(posOnGround.x)
     })
   })
 
