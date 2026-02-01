@@ -57,8 +57,8 @@ export class BossManager {
     // Create Brute Justice (wide box)
     this.createBruteJustice()
 
-    // Future: Create Alexander Prime
-    // this.createAlexanderPrime()
+    // Create Alexander Prime (tall pillar)
+    this.createAlexanderPrime()
   }
 
   private createCruiseChaser(): void {
@@ -113,6 +113,35 @@ export class BossManager {
 
     this.bosses.set('bruteJustice', {
       type: 'bruteJustice',
+      mesh,
+      visible: false,
+    })
+  }
+
+  private createAlexanderPrime(): void {
+    if (!this.scene) return
+
+    const config = BOSS_CONFIG.alexanderPrime
+    const geometry = new THREE.CylinderGeometry(
+      config.radius,
+      config.radius,
+      config.height,
+      16
+    )
+    const material = new THREE.MeshStandardMaterial({
+      color: config.color,
+      metalness: 0.7,
+      roughness: 0.3,
+    })
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.position.set(0, config.height / 2, 0)
+    mesh.castShadow = true
+    mesh.visible = false // Hidden until mechanic starts
+
+    this.scene.add(mesh)
+
+    this.bosses.set('alexanderPrime', {
+      type: 'alexanderPrime',
       mesh,
       visible: false,
     })

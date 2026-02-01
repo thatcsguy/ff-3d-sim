@@ -220,6 +220,21 @@ export class Game {
       },
     })
 
+    // Test Alexander Prime spawn (Sacrament position)
+    this.timeline.addEvent({
+      id: 'test-alex-spawn',
+      time: 8.0,
+      handler: () => {
+        // Show Alexander Prime at south side of arena
+        this.bossManager.show(
+          'alexanderPrime',
+          new THREE.Vector3(0, 0, 10)
+        )
+        // Face north (toward center)
+        this.bossManager.setRotation('alexanderPrime', 0)
+      },
+    })
+
     // Start the timeline automatically for testing
     this.timeline.start()
   }
