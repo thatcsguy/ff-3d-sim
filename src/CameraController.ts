@@ -6,6 +6,7 @@ import {
   CAMERA_DEFAULT_ZOOM,
   CAMERA_MIN_PITCH,
   CAMERA_MAX_PITCH,
+  CAMERA_FLOOR_HEIGHT,
 } from './constants'
 
 const ROTATION_SENSITIVITY = 0.003
@@ -49,14 +50,25 @@ export class CameraController {
     this.inputManager.resetMouseDelta()
 
     // Calculate camera position in spherical coordinates around target
-    const offsetX = this.zoom * Math.sin(this.yaw) * Math.cos(this.pitch)
-    const offsetY = this.zoom * Math.sin(this.pitch)
-    const offsetZ = this.zoom * Math.cos(this.yaw) * Math.cos(this.pitch)
+    // Apply floor collision: reduce effective zoom if camera would go below floor
+    let effectiveZoom = this.zoom
+    const offsetY = effectiveZoom * Math.sin(this.pitch)
+    const cameraY = targetPosition.y + offsetY
+
+    if (cameraY < CAMERA_FLOOR_HEIGHT && this.pitch < 0) {
+      // Camera would be below floor - calculate max zoom that keeps it above
+      const maxZoomForFloor = (targetPosition.y - CAMERA_FLOOR_HEIGHT) / Math.abs(Math.sin(this.pitch))
+      effectiveZoom = Math.max(CAMERA_MIN_ZOOM, Math.min(effectiveZoom, maxZoomForFloor))
+    }
+
+    const finalOffsetX = effectiveZoom * Math.sin(this.yaw) * Math.cos(this.pitch)
+    const finalOffsetY = effectiveZoom * Math.sin(this.pitch)
+    const finalOffsetZ = effectiveZoom * Math.cos(this.yaw) * Math.cos(this.pitch)
 
     this.camera.position.set(
-      targetPosition.x + offsetX,
-      targetPosition.y + offsetY,
-      targetPosition.z + offsetZ
+      targetPosition.x + finalOffsetX,
+      Math.max(CAMERA_FLOOR_HEIGHT, targetPosition.y + finalOffsetY),
+      targetPosition.z + finalOffsetZ
     )
     this.camera.lookAt(targetPosition)
   }
