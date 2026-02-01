@@ -13,6 +13,7 @@ import { BossManager } from './BossManager'
 import { NumberSpriteManager } from './NumberSpriteManager'
 import { ResultOverlay } from './ResultOverlay'
 import { StartPrompt } from './StartPrompt'
+import { ChakramManager } from './ChakramManager'
 
 type GameState = 'waiting' | 'playing' | 'failed' | 'clear'
 
@@ -36,6 +37,7 @@ export class Game {
   private numberSpriteManager: NumberSpriteManager
   private resultOverlay: ResultOverlay
   private startPrompt: StartPrompt
+  private chakramManager: ChakramManager
   private gameState: GameState = 'waiting'
   // Time to wait after all AoEs resolve before declaring success (seconds)
   private readonly successDelayAfterLastAoE: number = 0.5
@@ -138,6 +140,9 @@ export class Game {
 
     // Start prompt setup
     this.startPrompt = new StartPrompt()
+
+    // Chakram manager setup
+    this.chakramManager = new ChakramManager(this.scene)
 
     this.setupTestTimeline()
 
@@ -368,21 +373,58 @@ export class Game {
       },
     })
 
-    // Chakrams cross center (circle AoE at center)
+    // Chakrams spawn at cardinals and cross through center
+    // Two pairs: North<->South and West<->East cross simultaneously
     this.timeline.addEvent({
-      id: 'chakrams',
+      id: 'chakrams-spawn',
       time: 2.0,
       handler: () => {
-        this.aoeManager.spawn({
-          id: 'chakram-aoe',
-          shape: 'circle',
-          position: new THREE.Vector3(0, 0, 0),
-          radius: 6, // Slightly smaller to allow escape
-          telegraphDuration: 2.0,
-          onResolve: () => {
-            console.log('Chakrams resolved!')
-          },
+        const arenaEdge = 18 // Arena radius
+        const travelTime = 2.0 // Time to cross arena
+        const chakramRadius = 1.2
+        const hitRadius = 2.5 // Generous hit detection
+
+        // North to South chakram
+        this.chakramManager.spawn({
+          id: 'chakram-north',
+          startPosition: new THREE.Vector3(0, 0, -arenaEdge),
+          endPosition: new THREE.Vector3(0, 0, arenaEdge),
+          travelTime,
+          radius: chakramRadius,
+          hitRadius,
         })
+
+        // South to North chakram
+        this.chakramManager.spawn({
+          id: 'chakram-south',
+          startPosition: new THREE.Vector3(0, 0, arenaEdge),
+          endPosition: new THREE.Vector3(0, 0, -arenaEdge),
+          travelTime,
+          radius: chakramRadius,
+          hitRadius,
+        })
+
+        // West to East chakram
+        this.chakramManager.spawn({
+          id: 'chakram-west',
+          startPosition: new THREE.Vector3(-arenaEdge, 0, 0),
+          endPosition: new THREE.Vector3(arenaEdge, 0, 0),
+          travelTime,
+          radius: chakramRadius,
+          hitRadius,
+        })
+
+        // East to West chakram
+        this.chakramManager.spawn({
+          id: 'chakram-east',
+          startPosition: new THREE.Vector3(arenaEdge, 0, 0),
+          endPosition: new THREE.Vector3(-arenaEdge, 0, 0),
+          travelTime,
+          radius: chakramRadius,
+          hitRadius,
+        })
+
+        console.log('Chakrams spawned!')
       },
     })
 
@@ -798,6 +840,10 @@ export class Game {
     this.aoeManager.dispose()
     this.aoeManager = new AoEManager(this.scene)
 
+    // Clear all chakrams
+    this.chakramManager.dispose()
+    this.chakramManager = new ChakramManager(this.scene)
+
     // Hide all bosses
     this.bossManager.hide('cruiseChaser')
     this.bossManager.hide('bruteJustice')
@@ -884,6 +930,16 @@ export class Game {
       this.triggerFailure()
     }
 
+    // Update chakrams and check for hits
+    const chakramHits = this.chakramManager.update(
+      deltaTime,
+      this.playerMesh.position
+    )
+    if (chakramHits.length > 0 && this.gameState === 'playing') {
+      console.log('Player hit by chakrams:', chakramHits)
+      this.triggerFailure()
+    }
+
     // Check for success: timeline complete and no active AoEs, with a small delay
     if (this.gameState === 'playing' && this.timeline.isComplete()) {
       const activeAoECount = this.aoeManager.getActiveCount()
@@ -929,6 +985,7 @@ export class Game {
     this.settingsMenu.dispose()
     this.npcManager.dispose()
     this.aoeManager.dispose()
+    this.chakramManager.dispose()
     this.bossManager.dispose()
     this.numberSpriteManager.dispose()
     this.resultOverlay.dispose()
