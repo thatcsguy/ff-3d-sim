@@ -30,6 +30,8 @@ export class NPCManager {
   private npcs: NPC[] = []
   private scene: THREE.Scene | null = null
   private arena: Arena
+  private scriptedMode: boolean = false
+  private scriptedPositions: Map<number, THREE.Vector3> = new Map()
 
   constructor(arena: Arena) {
     this.arena = arena
@@ -77,26 +79,36 @@ export class NPCManager {
   }
 
   update(deltaTime: number): void {
-    for (const npc of this.npcs) {
-      // Update wander timer
-      npc.wanderTimer -= deltaTime
+    for (let i = 0; i < this.npcs.length; i++) {
+      const npc = this.npcs[i]
 
-      // Pick new target when timer expires
-      if (npc.wanderTimer <= 0) {
-        npc.wanderTimer = 2 + Math.random() * 3 // 2-5 seconds between moves
+      // In scripted mode, move toward scripted position instead of wandering
+      if (this.scriptedMode) {
+        const scriptedPos = this.scriptedPositions.get(i)
+        if (scriptedPos) {
+          npc.targetPosition.copy(scriptedPos)
+        }
+      } else {
+        // Update wander timer
+        npc.wanderTimer -= deltaTime
 
-        // Random offset from home position
-        const angle = Math.random() * Math.PI * 2
-        const distance = Math.random() * NPC_WANDER_RADIUS
+        // Pick new target when timer expires
+        if (npc.wanderTimer <= 0) {
+          npc.wanderTimer = 2 + Math.random() * 3 // 2-5 seconds between moves
 
-        npc.targetPosition.set(
-          npc.homePosition.x + Math.cos(angle) * distance,
-          npc.homePosition.y,
-          npc.homePosition.z + Math.sin(angle) * distance
-        )
+          // Random offset from home position
+          const angle = Math.random() * Math.PI * 2
+          const distance = Math.random() * NPC_WANDER_RADIUS
 
-        // Clamp target to arena
-        this.arena.clampToArena(npc.targetPosition)
+          npc.targetPosition.set(
+            npc.homePosition.x + Math.cos(angle) * distance,
+            npc.homePosition.y,
+            npc.homePosition.z + Math.sin(angle) * distance
+          )
+
+          // Clamp target to arena
+          this.arena.clampToArena(npc.targetPosition)
+        }
       }
 
       // Move toward target
@@ -128,6 +140,80 @@ export class NPCManager {
 
   getMeshes(): THREE.Mesh[] {
     return this.npcs.map((npc) => npc.mesh)
+  }
+
+  /**
+   * Enable or disable scripted movement mode.
+   * When enabled, NPCs move toward scripted positions instead of wandering.
+   */
+  setScriptedMode(enabled: boolean): void {
+    this.scriptedMode = enabled
+  }
+
+  /**
+   * Set a scripted position for an NPC (by index).
+   * NPC will move toward this position when in scripted mode.
+   */
+  setScriptedPosition(npcIndex: number, position: THREE.Vector3): void {
+    this.scriptedPositions.set(npcIndex, position.clone())
+  }
+
+  /**
+   * Set scripted positions for all NPCs based on their assigned party numbers.
+   * @param positions Map of party number (1-8) to position. Player is excluded.
+   * @param playerNumber The number assigned to the player (to skip).
+   */
+  setScriptedPositionsByNumber(
+    positions: Map<number, THREE.Vector3>,
+    playerNumber: number
+  ): void {
+    // NPCs are numbered 2-8 when player is 1, but can shift based on player's number
+    // NPC index i has party number: if partyNum <= playerNumber, it's i+2, else i+1
+    // Actually simpler: NPCs fill slots not taken by player
+    let npcIndex = 0
+    for (let partyNum = 1; partyNum <= 8; partyNum++) {
+      if (partyNum === playerNumber) continue
+      const pos = positions.get(partyNum)
+      if (pos && npcIndex < this.npcs.length) {
+        this.setScriptedPosition(npcIndex, pos)
+      }
+      npcIndex++
+    }
+  }
+
+  /**
+   * Clear all scripted positions.
+   */
+  clearScriptedPositions(): void {
+    this.scriptedPositions.clear()
+  }
+
+  /**
+   * Immediately teleport an NPC to a position.
+   */
+  teleportNPC(npcIndex: number, position: THREE.Vector3): void {
+    if (npcIndex >= 0 && npcIndex < this.npcs.length) {
+      this.npcs[npcIndex].mesh.position.copy(position)
+      this.npcs[npcIndex].mesh.position.y = PLAYER_HEIGHT / 2
+    }
+  }
+
+  /**
+   * Teleport all NPCs by party number (excluding player).
+   */
+  teleportByNumber(
+    positions: Map<number, THREE.Vector3>,
+    playerNumber: number
+  ): void {
+    let npcIndex = 0
+    for (let partyNum = 1; partyNum <= 8; partyNum++) {
+      if (partyNum === playerNumber) continue
+      const pos = positions.get(partyNum)
+      if (pos && npcIndex < this.npcs.length) {
+        this.teleportNPC(npcIndex, pos)
+      }
+      npcIndex++
+    }
   }
 
   dispose(): void {

@@ -40,6 +40,8 @@ export class Game {
   // Time to wait after all AoEs resolve before declaring success (seconds)
   private readonly successDelayAfterLastAoE: number = 0.5
   private successCheckTime: number | null = null
+  // Player's assigned party number for this attempt (1-8)
+  private playerNumber: number = 1
 
   constructor() {
     // Renderer setup
@@ -150,110 +152,365 @@ export class Game {
   }
 
   /**
-   * Temporary test timeline with a single circle AoE.
-   * This will be replaced with the full Wormhole mechanic.
+   * Get Braindead strategy positions for a given phase.
+   * Returns a Map of party number (1-8) to position.
+   *
+   * Braindead strategy:
+   * - Odds (1,3,5,7) go West (-X)
+   * - Evens (2,4,6,8) go East (+X)
+   * - 1/2 and 5/6 resolve north (-Z), 3/4 and 7/8 resolve south (+Z)
+   */
+  private getBraindeadPositions(phase: string): Map<number, THREE.Vector3> {
+    const positions = new Map<number, THREE.Vector3>()
+    const y = PLAYER_HEIGHT / 2
+
+    // Positions relative to arena (arena radius ~18m)
+    const westX = -8
+    const eastX = 8
+    const northZ = -8
+    const southZ = 8
+    const centerZ = 0
+    const farWestX = -12
+    const farEastX = 12
+
+    switch (phase) {
+      case 'start':
+        // Everyone stacks center
+        for (let i = 1; i <= 8; i++) {
+          positions.set(i, new THREE.Vector3(0, y, 0))
+        }
+        break
+
+      case 'spread':
+        // After chakrams, odds go west, evens go east
+        // Spread out vertically based on number pairs
+        positions.set(1, new THREE.Vector3(westX, y, northZ - 2)) // 1 north-west, top
+        positions.set(2, new THREE.Vector3(eastX, y, northZ - 2)) // 2 north-east, top
+        positions.set(3, new THREE.Vector3(westX, y, southZ + 2)) // 3 south-west, bottom
+        positions.set(4, new THREE.Vector3(eastX, y, southZ + 2)) // 4 south-east, bottom
+        positions.set(5, new THREE.Vector3(westX, y, northZ + 2)) // 5 north-west, below 1
+        positions.set(6, new THREE.Vector3(eastX, y, northZ + 2)) // 6 north-east, below 2
+        positions.set(7, new THREE.Vector3(westX, y, southZ - 2)) // 7 south-west, above 3
+        positions.set(8, new THREE.Vector3(eastX, y, southZ - 2)) // 8 south-east, above 4
+        break
+
+      case 'limit-cut-1-2':
+        // 1 and 2 go north to bait first Limit Cut
+        // Others stay at sides
+        positions.set(1, new THREE.Vector3(westX - 2, y, northZ))
+        positions.set(2, new THREE.Vector3(eastX + 2, y, northZ))
+        positions.set(3, new THREE.Vector3(westX, y, southZ))
+        positions.set(4, new THREE.Vector3(eastX, y, southZ))
+        positions.set(5, new THREE.Vector3(farWestX, y, centerZ - 3)) // 5 far west, moving to puddle
+        positions.set(6, new THREE.Vector3(farEastX, y, centerZ - 3)) // 6 far east, moving to puddle
+        positions.set(7, new THREE.Vector3(westX, y, centerZ))
+        positions.set(8, new THREE.Vector3(eastX, y, centerZ))
+        break
+
+      case 'puddle-1':
+        // 5/6 soak first puddles (far west/east)
+        positions.set(1, new THREE.Vector3(westX, y, northZ))
+        positions.set(2, new THREE.Vector3(eastX, y, northZ))
+        positions.set(3, new THREE.Vector3(westX, y, southZ))
+        positions.set(4, new THREE.Vector3(eastX, y, southZ))
+        positions.set(5, new THREE.Vector3(farWestX, y, centerZ)) // 5 soaking west puddle
+        positions.set(6, new THREE.Vector3(farEastX, y, centerZ)) // 6 soaking east puddle
+        positions.set(7, new THREE.Vector3(westX, y, centerZ))
+        positions.set(8, new THREE.Vector3(eastX, y, centerZ))
+        break
+
+      case 'limit-cut-3-4':
+        // 3/4 go south, 3 baits Super Jump
+        // 5/6 swap north with 1/2
+        positions.set(1, new THREE.Vector3(westX, y, centerZ + 2))
+        positions.set(2, new THREE.Vector3(eastX, y, centerZ + 2))
+        positions.set(3, new THREE.Vector3(westX - 2, y, southZ)) // 3 baits Super Jump
+        positions.set(4, new THREE.Vector3(eastX + 2, y, southZ))
+        positions.set(5, new THREE.Vector3(westX, y, northZ)) // 5 now north
+        positions.set(6, new THREE.Vector3(eastX, y, northZ)) // 6 now north
+        positions.set(7, new THREE.Vector3(farWestX, y, centerZ - 2)) // 7 moving to puddle
+        positions.set(8, new THREE.Vector3(farEastX, y, centerZ - 2)) // 8 moving to puddle
+        break
+
+      case 'puddle-2':
+        // 7/8 soak second puddles
+        positions.set(1, new THREE.Vector3(westX, y, centerZ))
+        positions.set(2, new THREE.Vector3(eastX, y, centerZ))
+        positions.set(3, new THREE.Vector3(westX, y, southZ - 4)) // 3 dodging Apoc Ray
+        positions.set(4, new THREE.Vector3(eastX, y, southZ - 4)) // 4 dodging Apoc Ray
+        positions.set(5, new THREE.Vector3(westX, y, northZ))
+        positions.set(6, new THREE.Vector3(eastX, y, northZ))
+        positions.set(7, new THREE.Vector3(farWestX, y, centerZ)) // 7 soaking west puddle
+        positions.set(8, new THREE.Vector3(farEastX, y, centerZ)) // 8 soaking east puddle
+        break
+
+      case 'limit-cut-5-6':
+        // 5/6 bait north
+        // 1/2 move to puddles
+        positions.set(1, new THREE.Vector3(farWestX, y, centerZ - 2)) // 1 moving to puddle
+        positions.set(2, new THREE.Vector3(farEastX, y, centerZ - 2)) // 2 moving to puddle
+        positions.set(3, new THREE.Vector3(westX, y, southZ))
+        positions.set(4, new THREE.Vector3(eastX, y, southZ))
+        positions.set(5, new THREE.Vector3(westX - 2, y, northZ)) // 5 baiting
+        positions.set(6, new THREE.Vector3(eastX + 2, y, northZ)) // 6 baiting
+        positions.set(7, new THREE.Vector3(westX, y, centerZ))
+        positions.set(8, new THREE.Vector3(eastX, y, centerZ))
+        break
+
+      case 'puddle-3':
+        // 1/2 soak third puddles
+        positions.set(1, new THREE.Vector3(farWestX, y, centerZ)) // 1 soaking west puddle
+        positions.set(2, new THREE.Vector3(farEastX, y, centerZ)) // 2 soaking east puddle
+        positions.set(3, new THREE.Vector3(westX, y, southZ))
+        positions.set(4, new THREE.Vector3(eastX, y, southZ))
+        positions.set(5, new THREE.Vector3(westX, y, northZ))
+        positions.set(6, new THREE.Vector3(eastX, y, northZ))
+        positions.set(7, new THREE.Vector3(westX, y, centerZ - 3))
+        positions.set(8, new THREE.Vector3(eastX, y, centerZ - 3))
+        break
+
+      case 'limit-cut-7-8':
+        // 7/8 bait south
+        positions.set(1, new THREE.Vector3(westX, y, centerZ))
+        positions.set(2, new THREE.Vector3(eastX, y, centerZ))
+        positions.set(3, new THREE.Vector3(westX, y, southZ - 4))
+        positions.set(4, new THREE.Vector3(eastX, y, southZ - 4))
+        positions.set(5, new THREE.Vector3(westX, y, northZ))
+        positions.set(6, new THREE.Vector3(eastX, y, northZ))
+        positions.set(7, new THREE.Vector3(westX - 2, y, southZ)) // 7 baiting
+        positions.set(8, new THREE.Vector3(eastX + 2, y, southZ)) // 8 baiting
+        break
+
+      case 'sacrament':
+        // All dodge Sacrament - avoid center and edges
+        // Move to safe spots (sides of T-laser)
+        positions.set(1, new THREE.Vector3(westX, y, northZ - 2))
+        positions.set(2, new THREE.Vector3(eastX, y, northZ - 2))
+        positions.set(3, new THREE.Vector3(westX, y, northZ + 2))
+        positions.set(4, new THREE.Vector3(eastX, y, northZ + 2))
+        positions.set(5, new THREE.Vector3(westX - 4, y, northZ))
+        positions.set(6, new THREE.Vector3(eastX + 4, y, northZ))
+        positions.set(7, new THREE.Vector3(westX - 4, y, centerZ))
+        positions.set(8, new THREE.Vector3(eastX + 4, y, centerZ))
+        break
+
+      case 'stack':
+        // Final stack for Enumeration
+        for (let i = 1; i <= 8; i++) {
+          // Slight spread to avoid overlap
+          const angle = ((i - 1) / 8) * Math.PI * 2
+          positions.set(
+            i,
+            new THREE.Vector3(Math.cos(angle) * 2, y, Math.sin(angle) * 2)
+          )
+        }
+        break
+    }
+
+    return positions
+  }
+
+  /**
+   * Set NPC positions for current phase (NPCs only, player must move themselves)
+   */
+  private setNPCPositions(phase: string): void {
+    const positions = this.getBraindeadPositions(phase)
+    this.npcManager.setScriptedPositionsByNumber(positions, this.playerNumber)
+  }
+
+  /**
+   * Setup the Wormhole Formation timeline with Braindead strategy.
    */
   private setupTestTimeline(): void {
+    // Randomly assign player number (1-8)
+    this.playerNumber = Math.floor(Math.random() * 8) + 1
+
+    // Enable scripted NPC movement
+    this.npcManager.setScriptedMode(true)
+
+    // Start with everyone at center
     this.timeline.addEvent({
-      id: 'test-aoe-1',
-      time: 2.0, // Spawn after 2 seconds
+      id: 'phase-start',
+      time: 0.1,
       handler: () => {
-        this.aoeManager.spawn({
-          id: 'circle-aoe-1',
-          shape: 'circle',
-          position: new THREE.Vector3(0, 0, 0), // Center of arena
-          radius: 5,
-          telegraphDuration: 2.0, // 2 seconds to get out
-          onResolve: () => {
-            console.log('Circle AoE resolved!')
-          },
-        })
+        // Teleport all NPCs to center
+        const startPos = this.getBraindeadPositions('start')
+        this.npcManager.teleportByNumber(startPos, this.playerNumber)
+        this.setNPCPositions('start')
       },
     })
 
-    // Test number sprite assignment at start
+    // Assign number sprites
     this.timeline.addEvent({
-      id: 'test-numbers-assign',
+      id: 'numbers-assign',
       time: 0.5,
       handler: () => {
-        // Assign player number 1
-        this.numberSpriteManager.assignNumber('player', this.playerMesh, 1)
-        // Assign NPCs numbers 2-8
+        // Assign player their random number
+        this.numberSpriteManager.assignNumber(
+          'player',
+          this.playerMesh,
+          this.playerNumber
+        )
+        // Assign NPCs the remaining numbers
         const npcs = this.npcManager.getMeshes()
-        for (let i = 0; i < npcs.length; i++) {
-          this.numberSpriteManager.assignNumber(`npc-${i}`, npcs[i], i + 2)
+        let npcIndex = 0
+        for (let partyNum = 1; partyNum <= 8; partyNum++) {
+          if (partyNum === this.playerNumber) continue
+          if (npcIndex < npcs.length) {
+            this.numberSpriteManager.assignNumber(
+              `npc-${npcIndex}`,
+              npcs[npcIndex],
+              partyNum
+            )
+            npcIndex++
+          }
         }
       },
     })
 
-    // Test Cruise Chaser spawn and Limit Cut dash
+    // Chakrams cross center (circle AoE at center)
     this.timeline.addEvent({
-      id: 'test-cc-spawn',
-      time: 3.0,
-      handler: () => {
-        // Show Cruise Chaser at west side of arena
-        this.bossManager.show(
-          'cruiseChaser',
-          new THREE.Vector3(-10, 0, 0)
-        )
-        // Face east (toward center)
-        this.bossManager.setRotation('cruiseChaser', Math.PI / 2)
-      },
-    })
-
-    // Test line AoE (Limit Cut dash style) - CC dashes through center
-    this.timeline.addEvent({
-      id: 'test-line-aoe-1',
-      time: 4.0, // After CC appears
+      id: 'chakrams',
+      time: 2.0,
       handler: () => {
         this.aoeManager.spawn({
-          id: 'line-aoe-1',
-          shape: 'line',
-          position: new THREE.Vector3(0, 0, 0), // Center of arena
-          length: 20, // Full arena width
-          width: 2,
-          rotation: Math.PI / 2, // East-West line (90 degrees)
-          telegraphDuration: 1.5,
+          id: 'chakram-aoe',
+          shape: 'circle',
+          position: new THREE.Vector3(0, 0, 0),
+          radius: 6, // Slightly smaller to allow escape
+          telegraphDuration: 2.0,
           onResolve: () => {
-            console.log('Cruise Chaser dash resolved!')
-            // Teleport CC to east side after dash
-            this.bossManager.setPosition(
-              'cruiseChaser',
-              new THREE.Vector3(10, 0, 0)
-            )
-            this.bossManager.setRotation('cruiseChaser', -Math.PI / 2)
+            console.log('Chakrams resolved!')
           },
         })
       },
     })
 
-    // Test Brute Justice spawn (Super Jump source position)
+    // NPCs spread to sides after chakram telegraph appears
     this.timeline.addEvent({
-      id: 'test-bj-spawn',
-      time: 6.0,
+      id: 'phase-spread',
+      time: 2.5,
       handler: () => {
-        // Show Brute Justice at north side of arena
-        this.bossManager.show(
-          'bruteJustice',
-          new THREE.Vector3(0, 0, -10)
-        )
-        // Face south (toward center)
+        this.setNPCPositions('spread')
+      },
+    })
+
+    // Cruise Chaser spawns for Limit Cut
+    this.timeline.addEvent({
+      id: 'cc-spawn',
+      time: 4.5,
+      handler: () => {
+        this.bossManager.show('cruiseChaser', new THREE.Vector3(-10, 0, 0))
+        this.bossManager.setRotation('cruiseChaser', Math.PI / 2)
+      },
+    })
+
+    // Limit Cut 1/2 - CC dashes north
+    this.timeline.addEvent({
+      id: 'phase-limit-cut-1-2',
+      time: 5.0,
+      handler: () => {
+        this.setNPCPositions('limit-cut-1-2')
+      },
+    })
+
+    this.timeline.addEvent({
+      id: 'limit-cut-1-2-dash',
+      time: 5.5,
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'lc-dash-1',
+          shape: 'line',
+          position: new THREE.Vector3(0, 0, -8),
+          length: 20,
+          width: 2.5,
+          rotation: Math.PI / 2,
+          telegraphDuration: 1.2,
+          onResolve: () => {
+            this.bossManager.setPosition(
+              'cruiseChaser',
+              new THREE.Vector3(10, 0, -8)
+            )
+          },
+        })
+      },
+    })
+
+    // First puddle soak (5/6)
+    this.timeline.addEvent({
+      id: 'phase-puddle-1',
+      time: 7.0,
+      handler: () => {
+        this.setNPCPositions('puddle-1')
+      },
+    })
+
+    // Limit Cut 3/4 + Super Jump bait
+    this.timeline.addEvent({
+      id: 'phase-limit-cut-3-4',
+      time: 8.5,
+      handler: () => {
+        this.setNPCPositions('limit-cut-3-4')
+      },
+    })
+
+    // Brute Justice spawns for Super Jump
+    this.timeline.addEvent({
+      id: 'bj-spawn',
+      time: 9.0,
+      handler: () => {
+        this.bossManager.show('bruteJustice', new THREE.Vector3(0, 0, -12))
         this.bossManager.setRotation('bruteJustice', Math.PI)
       },
     })
 
-    // Test cone AoE (Apocalyptic Ray from Brute Justice)
     this.timeline.addEvent({
-      id: 'test-cone-aoe-1',
-      time: 7.0,
+      id: 'limit-cut-3-4-dash',
+      time: 9.5,
       handler: () => {
         this.aoeManager.spawn({
-          id: 'cone-aoe-1',
+          id: 'lc-dash-2',
+          shape: 'line',
+          position: new THREE.Vector3(0, 0, 8),
+          length: 20,
+          width: 2.5,
+          rotation: Math.PI / 2,
+          telegraphDuration: 1.2,
+          onResolve: () => {
+            this.bossManager.setPosition(
+              'cruiseChaser',
+              new THREE.Vector3(-10, 0, 8)
+            )
+          },
+        })
+      },
+    })
+
+    // Super Jump lands + Apocalyptic Ray
+    this.timeline.addEvent({
+      id: 'super-jump-land',
+      time: 11.0,
+      handler: () => {
+        // BJ jumps to south
+        this.bossManager.setPosition(
+          'bruteJustice',
+          new THREE.Vector3(0, 0, 10)
+        )
+        this.bossManager.setRotation('bruteJustice', 0)
+      },
+    })
+
+    this.timeline.addEvent({
+      id: 'apocalyptic-ray',
+      time: 11.5,
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'apoc-ray',
           shape: 'cone',
-          position: new THREE.Vector3(0, 0, -10), // From BJ position
-          radius: 15, // Large cone reaching across arena
-          angle: Math.PI / 3, // 60 degree cone
-          rotation: Math.PI, // Pointing south
+          position: new THREE.Vector3(0, 0, 10),
+          radius: 15,
+          angle: Math.PI / 3,
+          rotation: 0, // Pointing north
           telegraphDuration: 2.0,
           onResolve: () => {
             console.log('Apocalyptic Ray resolved!')
@@ -262,40 +519,131 @@ export class Game {
       },
     })
 
-    // Test Alexander Prime spawn (Sacrament position)
+    // Second puddle soak (7/8)
     this.timeline.addEvent({
-      id: 'test-alex-spawn',
-      time: 8.0,
+      id: 'phase-puddle-2',
+      time: 12.0,
       handler: () => {
-        // Show Alexander Prime at south side of arena
-        this.bossManager.show(
-          'alexanderPrime',
-          new THREE.Vector3(0, 0, 10)
-        )
-        // Face north (toward center)
+        this.setNPCPositions('puddle-2')
+      },
+    })
+
+    // Limit Cut 5/6
+    this.timeline.addEvent({
+      id: 'phase-limit-cut-5-6',
+      time: 14.0,
+      handler: () => {
+        this.setNPCPositions('limit-cut-5-6')
+      },
+    })
+
+    this.timeline.addEvent({
+      id: 'limit-cut-5-6-dash',
+      time: 14.5,
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'lc-dash-3',
+          shape: 'line',
+          position: new THREE.Vector3(0, 0, -8),
+          length: 20,
+          width: 2.5,
+          rotation: Math.PI / 2,
+          telegraphDuration: 1.2,
+          onResolve: () => {
+            this.bossManager.setPosition(
+              'cruiseChaser',
+              new THREE.Vector3(10, 0, -8)
+            )
+          },
+        })
+      },
+    })
+
+    // Third puddle soak (1/2)
+    this.timeline.addEvent({
+      id: 'phase-puddle-3',
+      time: 16.0,
+      handler: () => {
+        this.setNPCPositions('puddle-3')
+      },
+    })
+
+    // Limit Cut 7/8
+    this.timeline.addEvent({
+      id: 'phase-limit-cut-7-8',
+      time: 17.5,
+      handler: () => {
+        this.setNPCPositions('limit-cut-7-8')
+      },
+    })
+
+    this.timeline.addEvent({
+      id: 'limit-cut-7-8-dash',
+      time: 18.0,
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'lc-dash-4',
+          shape: 'line',
+          position: new THREE.Vector3(0, 0, 8),
+          length: 20,
+          width: 2.5,
+          rotation: Math.PI / 2,
+          telegraphDuration: 1.2,
+          onResolve: () => {
+            this.bossManager.hide('cruiseChaser')
+          },
+        })
+      },
+    })
+
+    // Alexander Prime spawns
+    this.timeline.addEvent({
+      id: 'alex-spawn',
+      time: 19.5,
+      handler: () => {
+        this.bossManager.show('alexanderPrime', new THREE.Vector3(0, 0, 12))
         this.bossManager.setRotation('alexanderPrime', 0)
       },
     })
 
-    // Test T-shape AoE (Sacrament from Alexander Prime)
+    // Sacrament
     this.timeline.addEvent({
-      id: 'test-tshape-aoe-1',
-      time: 9.0,
+      id: 'phase-sacrament',
+      time: 20.0,
+      handler: () => {
+        this.setNPCPositions('sacrament')
+      },
+    })
+
+    this.timeline.addEvent({
+      id: 'sacrament-cast',
+      time: 20.5,
       handler: () => {
         this.aoeManager.spawn({
-          id: 'tshape-aoe-1',
+          id: 'sacrament-aoe',
           shape: 'tshape',
-          position: new THREE.Vector3(0, 0, 10), // From AP position
-          stemLength: 20, // Long stem reaching across arena
-          stemWidth: 3,
-          barLength: 16, // Wide bar at the end
-          barWidth: 3,
-          rotation: 0, // Pointing north (toward center)
+          position: new THREE.Vector3(0, 0, 12),
+          stemLength: 24,
+          stemWidth: 4,
+          barLength: 20,
+          barWidth: 4,
+          rotation: 0,
           telegraphDuration: 2.5,
           onResolve: () => {
             console.log('Sacrament resolved!')
           },
         })
+      },
+    })
+
+    // Final stack
+    this.timeline.addEvent({
+      id: 'phase-stack',
+      time: 23.5,
+      handler: () => {
+        this.setNPCPositions('stack')
+        this.bossManager.hide('bruteJustice')
+        this.bossManager.hide('alexanderPrime')
       },
     })
 
@@ -364,7 +712,11 @@ export class Game {
     this.numberSpriteManager = new NumberSpriteManager()
     this.numberSpriteManager.init(this.scene)
 
-    // Re-setup timeline (don't start yet)
+    // Reset NPC scripted mode and positions
+    this.npcManager.setScriptedMode(false)
+    this.npcManager.clearScriptedPositions()
+
+    // Re-setup timeline (don't start yet - will assign new random number)
     this.setupTestTimeline()
 
     // Show start prompt
