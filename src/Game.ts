@@ -255,6 +255,28 @@ export class Game {
       },
     })
 
+    // Test T-shape AoE (Sacrament from Alexander Prime)
+    this.timeline.addEvent({
+      id: 'test-tshape-aoe-1',
+      time: 9.0,
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'tshape-aoe-1',
+          shape: 'tshape',
+          position: new THREE.Vector3(0, 0, 10), // From AP position
+          stemLength: 20, // Long stem reaching across arena
+          stemWidth: 3,
+          barLength: 16, // Wide bar at the end
+          barWidth: 3,
+          rotation: 0, // Pointing north (toward center)
+          telegraphDuration: 2.5,
+          onResolve: () => {
+            console.log('Sacrament resolved!')
+          },
+        })
+      },
+    })
+
     // Start the timeline automatically for testing
     this.timeline.start()
   }

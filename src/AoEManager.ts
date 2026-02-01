@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * AoE (Area of Effect) types supported by the system.
  */
-export type AoEShape = 'circle' | 'line' | 'cone'
+export type AoEShape = 'circle' | 'line' | 'cone' | 'tshape'
 
 /**
  * Configuration for spawning an AoE.
@@ -15,8 +15,12 @@ export interface AoEConfig {
   radius?: number // for circle: the radius
   length?: number // for line: length of the line
   width?: number // for line: width of the line
-  rotation?: number // for line/cone: rotation in radians (0 = pointing +Z)
+  rotation?: number // for line/cone/tshape: rotation in radians (0 = pointing +Z)
   angle?: number // for cone: angle of the cone in radians (full width)
+  stemLength?: number // for tshape: length of the vertical stem
+  stemWidth?: number // for tshape: width of the vertical stem
+  barLength?: number // for tshape: length of the horizontal bar
+  barWidth?: number // for tshape: width of the horizontal bar
   telegraphDuration: number // how long the telegraph shows before resolving (seconds)
   onResolve?: () => void // callback when AoE resolves (for damage checks)
 }
@@ -124,6 +128,43 @@ export class AoEManager {
         mesh.rotation.z = rotation
         break
       }
+      case 'tshape': {
+        // T-shape consists of two rectangles: a stem (vertical) and a bar (horizontal)
+        // The T points in the rotation direction, with the bar at the far end
+        const stemLength = config.stemLength!
+        const stemWidth = config.stemWidth!
+        const barLength = config.barLength!
+        const barWidth = config.barWidth!
+        const rotation = config.rotation ?? 0
+
+        // Create a group to hold both parts of the T
+        const group = new THREE.Group()
+
+        // Stem: centered at origin, extending in +Y direction (before rotation to XZ)
+        const stemGeometry = new THREE.PlaneGeometry(stemWidth, stemLength)
+        const stemMesh = new THREE.Mesh(stemGeometry, material.clone())
+        // Position stem so its back edge is at origin, extending forward
+        stemMesh.position.set(0, stemLength / 2, 0)
+        group.add(stemMesh)
+
+        // Bar: at the far end of the stem, crossing horizontally
+        const barGeometry = new THREE.PlaneGeometry(barLength, barWidth)
+        const barMesh = new THREE.Mesh(barGeometry, material.clone())
+        // Position bar at the end of the stem
+        barMesh.position.set(0, stemLength, 0)
+        group.add(barMesh)
+
+        // Position and rotate the group
+        group.position.set(config.position.x, 0.01, config.position.z)
+        // Rotate to lay flat on XZ plane (rotate around X)
+        group.rotation.x = -Math.PI / 2
+        // Apply direction rotation around the new "up" (which is Z after the X rotation)
+        group.rotation.z = rotation
+
+        // Return the group as the mesh (type cast for storage, works because
+        // Group extends Object3D just like Mesh, and we handle disposal specially)
+        return group as unknown as THREE.Mesh
+      }
       default:
         throw new Error(`Unknown AoE shape: ${config.shape}`)
     }
@@ -172,10 +213,22 @@ export class AoEManager {
    * Flash the AoE to indicate resolution.
    */
   private flashAoE(aoe: ActiveAoE): void {
-    const material = aoe.mesh.material as THREE.MeshBasicMaterial
-    // Brighten and make more opaque
-    material.color.setHex(0xffff00)
-    material.opacity = 0.8
+    // T-shape uses a Group with multiple meshes
+    if (aoe.config.shape === 'tshape') {
+      const group = aoe.mesh as unknown as THREE.Group
+      group.children.forEach((child) => {
+        if (child instanceof THREE.Mesh) {
+          const material = child.material as THREE.MeshBasicMaterial
+          material.color.setHex(0xffff00)
+          material.opacity = 0.8
+        }
+      })
+    } else {
+      const material = aoe.mesh.material as THREE.MeshBasicMaterial
+      // Brighten and make more opaque
+      material.color.setHex(0xffff00)
+      material.opacity = 0.8
+    }
   }
 
   /**
@@ -223,6 +276,37 @@ export class AoEManager {
         // Check if within half-angle of cone
         return Math.abs(angleDiff) <= config.angle! / 2
       }
+      case 'tshape': {
+        // T-shape collision: check if player is in stem OR bar rectangle
+        // Transform player position to AoE local space first
+        const dx = playerPosition.x - config.position.x
+        const dz = playerPosition.z - config.position.z
+        const rotation = config.rotation ?? 0
+        // Rotate point by -rotation to align with AoE local axes
+        const cos = Math.cos(-rotation)
+        const sin = Math.sin(-rotation)
+        const localX = dx * cos - dz * sin
+        const localZ = dx * sin + dz * cos
+
+        const stemLength = config.stemLength!
+        const stemWidth = config.stemWidth!
+        const barLength = config.barLength!
+        const barWidth = config.barWidth!
+
+        // Check stem: extends from 0 to stemLength in local Z, centered on X
+        const inStem =
+          Math.abs(localX) <= stemWidth / 2 &&
+          localZ >= 0 &&
+          localZ <= stemLength
+
+        // Check bar: at localZ = stemLength, extends barLength/2 in each X direction
+        const inBar =
+          Math.abs(localX) <= barLength / 2 &&
+          localZ >= stemLength - barWidth / 2 &&
+          localZ <= stemLength + barWidth / 2
+
+        return inStem || inBar
+      }
       default:
         return false
     }
@@ -235,9 +319,22 @@ export class AoEManager {
     const aoe = this.activeAoEs.get(id)
     if (aoe) {
       this.scene.remove(aoe.mesh)
-      aoe.mesh.geometry.dispose()
-      if (aoe.mesh.material instanceof THREE.Material) {
-        aoe.mesh.material.dispose()
+      // T-shape uses a Group with multiple meshes
+      if (aoe.config.shape === 'tshape') {
+        const group = aoe.mesh as unknown as THREE.Group
+        group.children.forEach((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose()
+            if (child.material instanceof THREE.Material) {
+              child.material.dispose()
+            }
+          }
+        })
+      } else {
+        aoe.mesh.geometry.dispose()
+        if (aoe.mesh.material instanceof THREE.Material) {
+          aoe.mesh.material.dispose()
+        }
       }
       this.activeAoEs.delete(id)
     }
