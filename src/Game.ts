@@ -424,7 +424,6 @@ export class Game {
           hitRadius,
         })
 
-        console.log('Chakrams spawned!')
       },
     })
 
@@ -492,7 +491,6 @@ export class Game {
           soakCount: 1,
           telegraphDuration: 3.0,
           onResolve: () => {
-            console.log('Puddle 1 west resolved')
           },
         })
         // East puddle (soaked by 6)
@@ -504,7 +502,6 @@ export class Game {
           soakCount: 1,
           telegraphDuration: 3.0,
           onResolve: () => {
-            console.log('Puddle 1 east resolved')
           },
         })
       },
@@ -592,7 +589,6 @@ export class Game {
           rotation: 0, // Pointing north
           telegraphDuration: 2.0,
           onResolve: () => {
-            console.log('Apocalyptic Ray resolved!')
           },
         })
       },
@@ -612,7 +608,6 @@ export class Game {
           soakCount: 1,
           telegraphDuration: 3.0,
           onResolve: () => {
-            console.log('Puddle 2 west resolved')
           },
         })
         // East puddle (soaked by 8)
@@ -624,7 +619,6 @@ export class Game {
           soakCount: 1,
           telegraphDuration: 3.0,
           onResolve: () => {
-            console.log('Puddle 2 east resolved')
           },
         })
       },
@@ -684,7 +678,6 @@ export class Game {
           soakCount: 1,
           telegraphDuration: 3.0,
           onResolve: () => {
-            console.log('Puddle 3 west resolved')
           },
         })
         // East puddle (soaked by 2)
@@ -696,7 +689,6 @@ export class Game {
           soakCount: 1,
           telegraphDuration: 3.0,
           onResolve: () => {
-            console.log('Puddle 3 east resolved')
           },
         })
       },
@@ -773,7 +765,6 @@ export class Game {
           rotation: 0,
           telegraphDuration: 2.5,
           onResolve: () => {
-            console.log('Sacrament resolved!')
           },
         })
       },
@@ -931,7 +922,6 @@ export class Game {
     // Update AoEs and check for hits
     const hits = this.aoeManager.update(deltaTime, this.playerMesh.position)
     if (hits.length > 0 && this.gameState === 'playing') {
-      console.log('Player hit by AoEs:', hits)
       this.triggerFailure()
     }
 
@@ -941,7 +931,6 @@ export class Game {
       this.playerMesh.position
     )
     if (chakramHits.length > 0 && this.gameState === 'playing') {
-      console.log('Player hit by chakrams:', chakramHits)
       this.triggerFailure()
     }
 
