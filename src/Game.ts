@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { PLAYER_HEIGHT, PLAYER_RADIUS, ARENA_RADIUS } from './constants'
 import { InputManager } from './InputManager'
 import { CameraController } from './CameraController'
+import { PlayerController } from './PlayerController'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -12,6 +13,7 @@ export class Game {
   private lastTime: number = 0
   private inputManager: InputManager
   private cameraController: CameraController
+  private playerController: PlayerController
 
   constructor() {
     // Renderer setup
@@ -67,6 +69,9 @@ export class Game {
     this.playerMesh.position.set(0, PLAYER_HEIGHT / 2, 0)
     this.scene.add(this.playerMesh)
 
+    // Player controller setup (must be after playerMesh is created)
+    this.playerController = new PlayerController(this.playerMesh, this.inputManager)
+
     // Handle window resize
     window.addEventListener('resize', this.onResize)
   }
@@ -90,6 +95,9 @@ export class Game {
   }
 
   private update(deltaTime: number): void {
+    // Update player movement
+    this.playerController.update(deltaTime, this.cameraController)
+
     // Update camera to orbit around player
     const playerPosition = this.playerMesh.position.clone()
     playerPosition.y = PLAYER_HEIGHT // Look at player's head height
@@ -117,5 +125,9 @@ export class Game {
 
   getCameraController(): CameraController {
     return this.cameraController
+  }
+
+  getPlayerController(): PlayerController {
+    return this.playerController
   }
 }

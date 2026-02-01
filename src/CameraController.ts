@@ -68,7 +68,8 @@ export class CameraController {
 
   getRightDirection(): THREE.Vector3 {
     // Right direction perpendicular to forward on XZ plane
-    return new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw)).normalize()
+    // Forward = (-sin(yaw), 0, -cos(yaw)), so right = (cos(yaw), 0, -sin(yaw))
+    return new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).normalize()
   }
 
   getYaw(): number {
