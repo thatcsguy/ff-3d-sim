@@ -6,6 +6,7 @@ import { PlayerController } from './PlayerController'
 import { Arena } from './Arena'
 import { NPCManager } from './NPCManager'
 import { HUD } from './HUD'
+import { SettingsMenu } from './SettingsMenu'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -20,6 +21,7 @@ export class Game {
   private arena: Arena
   private npcManager: NPCManager
   private hud: HUD
+  private settingsMenu: SettingsMenu
 
   constructor() {
     // Renderer setup
@@ -78,6 +80,9 @@ export class Game {
     // HUD setup
     this.hud = new HUD()
 
+    // Settings menu setup
+    this.settingsMenu = new SettingsMenu()
+
     // Handle window resize
     window.addEventListener('resize', this.onResize)
   }
@@ -131,6 +136,7 @@ export class Game {
     }
     window.removeEventListener('resize', this.onResize)
     this.hud.dispose()
+    this.settingsMenu.dispose()
     this.npcManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
@@ -168,5 +174,9 @@ export class Game {
 
   getHUD(): HUD {
     return this.hud
+  }
+
+  getSettingsMenu(): SettingsMenu {
+    return this.settingsMenu
   }
 }
