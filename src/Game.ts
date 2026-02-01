@@ -110,9 +110,9 @@ export class Game {
     // Update NPCs
     this.npcManager.update(deltaTime)
 
-    // Update camera to orbit around player
+    // Update camera to orbit around player (follow jumping)
     const playerPosition = this.playerMesh.position.clone()
-    playerPosition.y = PLAYER_HEIGHT // Look at player's head height
+    playerPosition.y += PLAYER_HEIGHT / 2 // Look at player's head height
     this.cameraController.update(deltaTime, playerPosition)
 
     // Update HUD
