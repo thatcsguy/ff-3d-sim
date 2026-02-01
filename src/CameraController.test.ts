@@ -117,6 +117,103 @@ describe('CameraController', () => {
 
       expect(cameraController.getZoom()).toBeGreaterThanOrEqual(CAMERA_MIN_ZOOM)
     })
+
+    describe('gamepad zoom', () => {
+      function createGamepadEvent(type: string, index: number): Event {
+        const event = new Event(type) as Event & { gamepad: Partial<Gamepad> }
+        event.gamepad = { index }
+        return event
+      }
+
+      function createMockGamepad(
+        rightStickY: number,
+        lbPressed: boolean
+      ): Gamepad {
+        const buttons = Array(5)
+          .fill(null)
+          .map(() => ({ pressed: false, touched: false, value: 0 }))
+        buttons[4] = { pressed: lbPressed, touched: lbPressed, value: lbPressed ? 1 : 0 }
+        return {
+          index: 0,
+          axes: [0, 0, 0, rightStickY],
+          buttons,
+        } as unknown as Gamepad
+      }
+
+      it('zooms out when LB held and right stick pushed down', () => {
+        const mockGamepad = createMockGamepad(0.8, true)
+        Object.defineProperty(navigator, 'getGamepads', {
+          value: () => [mockGamepad, null, null, null],
+          configurable: true,
+        })
+        window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+
+        const initialZoom = cameraController.getZoom()
+        cameraController.update(0.1, new THREE.Vector3(0, 0, 0))
+
+        expect(cameraController.getZoom()).toBeGreaterThan(initialZoom)
+      })
+
+      it('zooms in when LB held and right stick pushed up', () => {
+        const mockGamepad = createMockGamepad(-0.8, true)
+        Object.defineProperty(navigator, 'getGamepads', {
+          value: () => [mockGamepad, null, null, null],
+          configurable: true,
+        })
+        window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+
+        const initialZoom = cameraController.getZoom()
+        cameraController.update(0.1, new THREE.Vector3(0, 0, 0))
+
+        expect(cameraController.getZoom()).toBeLessThan(initialZoom)
+      })
+
+      it('does not zoom when LB not held', () => {
+        const mockGamepad = createMockGamepad(0.8, false)
+        Object.defineProperty(navigator, 'getGamepads', {
+          value: () => [mockGamepad, null, null, null],
+          configurable: true,
+        })
+        window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+
+        const initialZoom = cameraController.getZoom()
+        cameraController.update(0.1, new THREE.Vector3(0, 0, 0))
+
+        expect(cameraController.getZoom()).toBe(initialZoom)
+      })
+
+      it('clamps gamepad zoom to maximum', () => {
+        const mockGamepad = createMockGamepad(1.0, true)
+        Object.defineProperty(navigator, 'getGamepads', {
+          value: () => [mockGamepad, null, null, null],
+          configurable: true,
+        })
+        window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+
+        // Update many times to exceed max zoom
+        for (let i = 0; i < 50; i++) {
+          cameraController.update(0.1, new THREE.Vector3(0, 0, 0))
+        }
+
+        expect(cameraController.getZoom()).toBeLessThanOrEqual(CAMERA_MAX_ZOOM)
+      })
+
+      it('clamps gamepad zoom to minimum', () => {
+        const mockGamepad = createMockGamepad(-1.0, true)
+        Object.defineProperty(navigator, 'getGamepads', {
+          value: () => [mockGamepad, null, null, null],
+          configurable: true,
+        })
+        window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+
+        // Update many times to exceed min zoom
+        for (let i = 0; i < 50; i++) {
+          cameraController.update(0.1, new THREE.Vector3(0, 0, 0))
+        }
+
+        expect(cameraController.getZoom()).toBeGreaterThanOrEqual(CAMERA_MIN_ZOOM)
+      })
+    })
   })
 
   describe('forward direction', () => {

@@ -12,7 +12,9 @@ import {
 const ROTATION_SENSITIVITY = 0.003
 const ZOOM_SENSITIVITY = 1.5
 const GAMEPAD_ROTATION_SPEED = 2.5 // radians per second at full stick deflection
+const GAMEPAD_ZOOM_SPEED = 15 // units per second at full stick deflection
 const STICK_DEADZONE = 0.1
+const GAMEPAD_ZOOM_MODIFIER_BUTTON = 4 // Left bumper (LB)
 
 export class CameraController {
   private camera: THREE.PerspectiveCamera
@@ -52,12 +54,25 @@ export class CameraController {
 
     this.inputManager.resetMouseDelta()
 
-    // Gamepad right stick camera rotation
+    // Gamepad right stick: camera rotation normally, zoom when LB held
     const rightStick = this.inputManager.getRightStick()
-    if (Math.abs(rightStick.x) > STICK_DEADZONE || Math.abs(rightStick.y) > STICK_DEADZONE) {
-      this.yaw -= rightStick.x * GAMEPAD_ROTATION_SPEED * deltaTime
-      this.pitch += rightStick.y * GAMEPAD_ROTATION_SPEED * deltaTime
-      this.pitch = Math.max(CAMERA_MIN_PITCH, Math.min(CAMERA_MAX_PITCH, this.pitch))
+    const isZoomModifierHeld = this.inputManager.isButtonPressed(GAMEPAD_ZOOM_MODIFIER_BUTTON)
+
+    if (isZoomModifierHeld) {
+      // LB held: right stick Y controls zoom (up = zoom in, down = zoom out)
+      if (Math.abs(rightStick.y) > STICK_DEADZONE) {
+        this.zoom = Math.max(
+          CAMERA_MIN_ZOOM,
+          Math.min(CAMERA_MAX_ZOOM, this.zoom + rightStick.y * GAMEPAD_ZOOM_SPEED * deltaTime)
+        )
+      }
+    } else {
+      // Normal: right stick controls camera rotation
+      if (Math.abs(rightStick.x) > STICK_DEADZONE || Math.abs(rightStick.y) > STICK_DEADZONE) {
+        this.yaw -= rightStick.x * GAMEPAD_ROTATION_SPEED * deltaTime
+        this.pitch += rightStick.y * GAMEPAD_ROTATION_SPEED * deltaTime
+        this.pitch = Math.max(CAMERA_MIN_PITCH, Math.min(CAMERA_MAX_PITCH, this.pitch))
+      }
     }
 
     // Apply vertical offset for character screen position setting
