@@ -15,6 +15,16 @@ interface Boss {
   visible: boolean
 }
 
+interface JumpAnimation {
+  bossType: BossType
+  startPosition: THREE.Vector3
+  endPosition: THREE.Vector3
+  peakHeight: number
+  duration: number
+  elapsed: number
+  onComplete?: () => void
+}
+
 // Boss dimensions and colors
 const BOSS_CONFIG = {
   cruiseChaser: {
@@ -41,6 +51,7 @@ const BOSS_CONFIG = {
 export class BossManager {
   private bosses: Map<BossType, Boss> = new Map()
   private scene: THREE.Scene | null = null
+  private activeJump: JumpAnimation | null = null
 
   constructor() {}
 
@@ -232,11 +243,92 @@ export class BossManager {
   }
 
   /**
-   * Update boss state (called each frame).
-   * Currently a no-op, but will handle animations/movement in future.
+   * Start a parabolic jump animation for a boss.
+   * The boss will arc from start to end position over the given duration.
+   *
+   * @param type Boss to animate
+   * @param endPosition Target landing position (XZ, Y is auto-calculated)
+   * @param duration Time in seconds for the jump
+   * @param peakHeight Maximum height above ground during arc (default 10m)
+   * @param onComplete Optional callback when jump finishes
    */
-  update(_deltaTime: number): void {
-    // Future: Handle boss animations, movement interpolation, etc.
+  startJumpArc(
+    type: BossType,
+    endPosition: THREE.Vector3,
+    duration: number,
+    peakHeight: number = 10,
+    onComplete?: () => void
+  ): void {
+    const boss = this.bosses.get(type)
+    if (!boss) return
+
+    const startPosition = boss.mesh.position.clone()
+    // Store XZ ground positions (Y will be calculated during animation)
+    const startGround = new THREE.Vector3(
+      startPosition.x,
+      0,
+      startPosition.z
+    )
+    const endGround = new THREE.Vector3(endPosition.x, 0, endPosition.z)
+
+    this.activeJump = {
+      bossType: type,
+      startPosition: startGround,
+      endPosition: endGround,
+      peakHeight,
+      duration,
+      elapsed: 0,
+      onComplete,
+    }
+  }
+
+  /**
+   * Check if a boss is currently jumping.
+   */
+  isJumping(type: BossType): boolean {
+    return this.activeJump?.bossType === type
+  }
+
+  /**
+   * Update boss state (called each frame).
+   * Handles jump arc animations.
+   */
+  update(deltaTime: number): void {
+    if (!this.activeJump) return
+
+    this.activeJump.elapsed += deltaTime
+    const t = Math.min(this.activeJump.elapsed / this.activeJump.duration, 1)
+
+    const boss = this.bosses.get(this.activeJump.bossType)
+    if (!boss) {
+      this.activeJump = null
+      return
+    }
+
+    // Linear interpolation for XZ position
+    const x =
+      this.activeJump.startPosition.x +
+      (this.activeJump.endPosition.x - this.activeJump.startPosition.x) * t
+    const z =
+      this.activeJump.startPosition.z +
+      (this.activeJump.endPosition.z - this.activeJump.startPosition.z) * t
+
+    // Parabolic arc for Y: peaks at t=0.5
+    // y = 4 * peakHeight * t * (1 - t)
+    const arcY = 4 * this.activeJump.peakHeight * t * (1 - t)
+    const bossHeight = this.getBossHeight(this.activeJump.bossType)
+    const y = arcY + bossHeight / 2
+
+    boss.mesh.position.set(x, y, z)
+
+    // Animation complete
+    if (t >= 1) {
+      const onComplete = this.activeJump.onComplete
+      this.activeJump = null
+      if (onComplete) {
+        onComplete()
+      }
+    }
   }
 
   dispose(): void {

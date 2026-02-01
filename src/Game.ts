@@ -560,17 +560,22 @@ export class Game {
       },
     })
 
-    // Super Jump lands + Apocalyptic Ray
+    // Super Jump starts - BJ arcs through the air to south
     this.timeline.addEvent({
-      id: 'super-jump-land',
-      time: 11.0,
+      id: 'super-jump-start',
+      time: 10.0,
       handler: () => {
-        // BJ jumps to south
-        this.bossManager.setPosition(
+        // BJ jumps in an arc to south (1 second duration, 10m peak height)
+        this.bossManager.startJumpArc(
           'bruteJustice',
-          new THREE.Vector3(0, 0, 10)
+          new THREE.Vector3(0, 0, 10),
+          1.0,
+          10,
+          () => {
+            // Face north after landing
+            this.bossManager.setRotation('bruteJustice', 0)
+          }
         )
-        this.bossManager.setRotation('bruteJustice', 0)
       },
     })
 
