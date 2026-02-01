@@ -96,4 +96,20 @@ export class Timeline {
     this.events = []
     this.executedEvents.clear()
   }
+
+  /**
+   * Check if all events have been executed.
+   */
+  isComplete(): boolean {
+    return this.events.length > 0 && this.executedEvents.size === this.events.length
+  }
+
+  /**
+   * Get the time of the last event in the timeline.
+   * Returns 0 if no events exist.
+   */
+  getEndTime(): number {
+    if (this.events.length === 0) return 0
+    return Math.max(...this.events.map((e) => e.time))
+  }
 }

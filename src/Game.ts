@@ -11,6 +11,9 @@ import { Timeline } from './Timeline'
 import { AoEManager } from './AoEManager'
 import { BossManager } from './BossManager'
 import { NumberSpriteManager } from './NumberSpriteManager'
+import { ResultOverlay } from './ResultOverlay'
+
+type GameState = 'playing' | 'failed' | 'clear'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -30,6 +33,11 @@ export class Game {
   private aoeManager: AoEManager
   private bossManager: BossManager
   private numberSpriteManager: NumberSpriteManager
+  private resultOverlay: ResultOverlay
+  private gameState: GameState = 'playing'
+  // Time to wait after all AoEs resolve before declaring success (seconds)
+  private readonly successDelayAfterLastAoE: number = 0.5
+  private successCheckTime: number | null = null
 
   constructor() {
     // Renderer setup
@@ -121,7 +129,13 @@ export class Game {
     this.numberSpriteManager = new NumberSpriteManager()
     this.numberSpriteManager.init(this.scene)
 
+    // Result overlay setup
+    this.resultOverlay = new ResultOverlay()
+
     this.setupTestTimeline()
+
+    // Listen for restart key
+    window.addEventListener('keydown', this.onKeyDown)
 
     // Handle window resize
     window.addEventListener('resize', this.onResize)
@@ -287,6 +301,71 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight)
   }
 
+  private onKeyDown = (event: KeyboardEvent): void => {
+    // Restart on R key when in failed or clear state
+    if (event.key === 'r' || event.key === 'R') {
+      if (this.gameState === 'failed' || this.gameState === 'clear') {
+        this.restart()
+      }
+    }
+  }
+
+  /**
+   * Restart the mechanic from the beginning.
+   */
+  private restart(): void {
+    // Hide result overlay
+    this.resultOverlay.hide()
+
+    // Reset game state
+    this.gameState = 'playing'
+    this.successCheckTime = null
+
+    // Reset player position to center
+    this.playerMesh.position.set(0, PLAYER_HEIGHT / 2, 0)
+
+    // Reset timeline
+    this.timeline.reset()
+    this.timeline.clearEvents()
+
+    // Clear all AoEs
+    this.aoeManager.dispose()
+    this.aoeManager = new AoEManager(this.scene)
+
+    // Hide all bosses
+    this.bossManager.hide('cruiseChaser')
+    this.bossManager.hide('bruteJustice')
+    this.bossManager.hide('alexanderPrime')
+
+    // Clear number sprites
+    this.numberSpriteManager.dispose()
+    this.numberSpriteManager = new NumberSpriteManager()
+    this.numberSpriteManager.init(this.scene)
+
+    // Re-setup and start timeline
+    this.setupTestTimeline()
+  }
+
+  /**
+   * Trigger failure state when player is hit by an AoE.
+   */
+  private triggerFailure(): void {
+    if (this.gameState !== 'playing') return
+    this.gameState = 'failed'
+    this.timeline.stop()
+    this.resultOverlay.show('failed')
+  }
+
+  /**
+   * Trigger success state when all mechanics are survived.
+   */
+  private triggerSuccess(): void {
+    if (this.gameState !== 'playing') return
+    this.gameState = 'clear'
+    this.timeline.stop()
+    this.resultOverlay.show('clear')
+  }
+
   private applySettings(): void {
     // Character screen position: 0 = bottom, 1 = top, 0.5 = center
     // Passed directly to camera controller which uses FOV math to maintain
@@ -327,9 +406,27 @@ export class Game {
 
     // Update AoEs and check for hits
     const hits = this.aoeManager.update(deltaTime, this.playerMesh.position)
-    if (hits.length > 0) {
+    if (hits.length > 0 && this.gameState === 'playing') {
       console.log('Player hit by AoEs:', hits)
-      // TODO: Trigger failure state
+      this.triggerFailure()
+    }
+
+    // Check for success: timeline complete and no active AoEs, with a small delay
+    if (this.gameState === 'playing' && this.timeline.isComplete()) {
+      const activeAoECount = this.aoeManager.getActiveCount()
+      if (activeAoECount === 0) {
+        // Start success delay timer if not already started
+        if (this.successCheckTime === null) {
+          this.successCheckTime = 0
+        }
+        this.successCheckTime += deltaTime
+        if (this.successCheckTime >= this.successDelayAfterLastAoE) {
+          this.triggerSuccess()
+        }
+      } else {
+        // Reset timer if there are still active AoEs
+        this.successCheckTime = null
+      }
     }
 
     // Update camera to orbit around player (follow jumping)
@@ -354,12 +451,14 @@ export class Game {
       this.animationFrameId = null
     }
     window.removeEventListener('resize', this.onResize)
+    window.removeEventListener('keydown', this.onKeyDown)
     this.hud.dispose()
     this.settingsMenu.dispose()
     this.npcManager.dispose()
     this.aoeManager.dispose()
     this.bossManager.dispose()
     this.numberSpriteManager.dispose()
+    this.resultOverlay.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
     this.arena.dispose()

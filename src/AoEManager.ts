@@ -355,4 +355,11 @@ export class AoEManager {
   dispose(): void {
     this.clear()
   }
+
+  /**
+   * Get the number of active (not yet resolved and removed) AoEs.
+   */
+  getActiveCount(): number {
+    return this.activeAoEs.size
+  }
 }
