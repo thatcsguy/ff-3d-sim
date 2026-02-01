@@ -11,7 +11,7 @@ export const CAMERA_MIN_ZOOM = 3
 export const CAMERA_MAX_ZOOM = 30
 export const CAMERA_DEFAULT_ZOOM = 15
 export const CAMERA_MIN_PITCH = -80 * (Math.PI / 180) // radians
-export const CAMERA_MAX_PITCH = 80 * (Math.PI / 180) // radians
+export const CAMERA_MAX_PITCH = 90 * (Math.PI / 180) // radians (perfect top-down view)
 
 // NPC settings
 export const NPC_COUNT = 7
