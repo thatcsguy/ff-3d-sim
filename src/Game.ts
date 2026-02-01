@@ -1,8 +1,9 @@
 import * as THREE from 'three'
-import { PLAYER_HEIGHT, PLAYER_RADIUS, ARENA_RADIUS } from './constants'
+import { PLAYER_HEIGHT, PLAYER_RADIUS } from './constants'
 import { InputManager } from './InputManager'
 import { CameraController } from './CameraController'
 import { PlayerController } from './PlayerController'
+import { Arena } from './Arena'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -14,6 +15,7 @@ export class Game {
   private inputManager: InputManager
   private cameraController: CameraController
   private playerController: PlayerController
+  private arena: Arena
 
   constructor() {
     // Renderer setup
@@ -47,15 +49,8 @@ export class Game {
     this.scene.add(directionalLight)
 
     // Arena floor (circular platform)
-    const arenaGeometry = new THREE.CircleGeometry(ARENA_RADIUS, 64)
-    const arenaMaterial = new THREE.MeshStandardMaterial({
-      color: 0x2d3436,
-      side: THREE.DoubleSide,
-    })
-    const arenaMesh = new THREE.Mesh(arenaGeometry, arenaMaterial)
-    arenaMesh.rotation.x = -Math.PI / 2
-    arenaMesh.position.y = 0
-    this.scene.add(arenaMesh)
+    this.arena = new Arena()
+    this.arena.create(this.scene)
 
     // Player cylinder (blue)
     const playerGeometry = new THREE.CylinderGeometry(
@@ -98,6 +93,9 @@ export class Game {
     // Update player movement
     this.playerController.update(deltaTime, this.cameraController)
 
+    // Clamp player to arena boundary
+    this.arena.clampToArena(this.playerMesh.position)
+
     // Update camera to orbit around player
     const playerPosition = this.playerMesh.position.clone()
     playerPosition.y = PLAYER_HEIGHT // Look at player's head height
@@ -129,5 +127,9 @@ export class Game {
 
   getPlayerController(): PlayerController {
     return this.playerController
+  }
+
+  getArena(): Arena {
+    return this.arena
   }
 }
