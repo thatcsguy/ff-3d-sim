@@ -113,4 +113,27 @@ describe('InputManager', () => {
       expect(inputManager.getMouseDelta()).toEqual({ x: 5, y: 3 })
     })
   })
+
+  describe('gamepad input', () => {
+    function createGamepadEvent(type: string, index: number): Event {
+      const event = new Event(type) as Event & { gamepad: Partial<Gamepad> }
+      event.gamepad = { index }
+      return event
+    }
+
+    it('starts with no gamepad connected', () => {
+      expect(inputManager.isGamepadConnected()).toBe(false)
+    })
+
+    it('detects gamepad connection', () => {
+      window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+      expect(inputManager.isGamepadConnected()).toBe(true)
+    })
+
+    it('detects gamepad disconnection', () => {
+      window.dispatchEvent(createGamepadEvent('gamepadconnected', 0))
+      window.dispatchEvent(createGamepadEvent('gamepaddisconnected', 0))
+      expect(inputManager.isGamepadConnected()).toBe(false)
+    })
+  })
 })

@@ -4,6 +4,11 @@ export enum MouseButton {
   Right = 2,
 }
 
+export interface GamepadState {
+  connected: boolean
+  index: number
+}
+
 export interface MouseDelta {
   x: number
   y: number
@@ -15,6 +20,7 @@ export class InputManager {
   private mouseDelta: MouseDelta = { x: 0, y: 0 }
   private element: HTMLElement
   private isPointerLocked: boolean = false
+  private gamepad: GamepadState = { connected: false, index: -1 }
 
   constructor(element: HTMLElement = document.body) {
     this.element = element
@@ -29,6 +35,8 @@ export class InputManager {
     this.element.addEventListener('mousemove', this.onMouseMove)
     this.element.addEventListener('contextmenu', this.onContextMenu)
     document.addEventListener('pointerlockchange', this.onPointerLockChange)
+    window.addEventListener('gamepadconnected', this.onGamepadConnected)
+    window.addEventListener('gamepaddisconnected', this.onGamepadDisconnected)
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -75,6 +83,18 @@ export class InputManager {
     this.isPointerLocked = document.pointerLockElement === this.element
   }
 
+  private onGamepadConnected = (event: GamepadEvent): void => {
+    this.gamepad = { connected: true, index: event.gamepad.index }
+  }
+
+  private onGamepadDisconnected = (): void => {
+    this.gamepad = { connected: false, index: -1 }
+  }
+
+  isGamepadConnected(): boolean {
+    return this.gamepad.connected
+  }
+
   isKeyDown(code: string): boolean {
     return this.keys.has(code)
   }
@@ -100,6 +120,8 @@ export class InputManager {
     this.element.removeEventListener('mousemove', this.onMouseMove)
     this.element.removeEventListener('contextmenu', this.onContextMenu)
     document.removeEventListener('pointerlockchange', this.onPointerLockChange)
+    window.removeEventListener('gamepadconnected', this.onGamepadConnected)
+    window.removeEventListener('gamepaddisconnected', this.onGamepadDisconnected)
     if (this.isPointerLocked && document.exitPointerLock) {
       document.exitPointerLock()
     }
