@@ -10,6 +10,7 @@ import { SettingsMenu } from './SettingsMenu'
 import { Timeline } from './Timeline'
 import { AoEManager } from './AoEManager'
 import { BossManager } from './BossManager'
+import { NumberSpriteManager } from './NumberSpriteManager'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -28,6 +29,7 @@ export class Game {
   private timeline: Timeline
   private aoeManager: AoEManager
   private bossManager: BossManager
+  private numberSpriteManager: NumberSpriteManager
 
   constructor() {
     // Renderer setup
@@ -115,6 +117,10 @@ export class Game {
     this.bossManager = new BossManager()
     this.bossManager.spawn(this.scene)
 
+    // Number sprite manager setup
+    this.numberSpriteManager = new NumberSpriteManager()
+    this.numberSpriteManager.init(this.scene)
+
     this.setupTestTimeline()
 
     // Handle window resize
@@ -140,6 +146,21 @@ export class Game {
             console.log('Circle AoE resolved!')
           },
         })
+      },
+    })
+
+    // Test number sprite assignment at start
+    this.timeline.addEvent({
+      id: 'test-numbers-assign',
+      time: 0.5,
+      handler: () => {
+        // Assign player number 1
+        this.numberSpriteManager.assignNumber('player', this.playerMesh, 1)
+        // Assign NPCs numbers 2-8
+        const npcs = this.npcManager.getMeshes()
+        for (let i = 0; i < npcs.length; i++) {
+          this.numberSpriteManager.assignNumber(`npc-${i}`, npcs[i], i + 2)
+        }
       },
     })
 
@@ -229,6 +250,9 @@ export class Game {
     // Update bosses
     this.bossManager.update(deltaTime)
 
+    // Update number sprites (follow their entities)
+    this.numberSpriteManager.update()
+
     // Update AoEs and check for hits
     const hits = this.aoeManager.update(deltaTime, this.playerMesh.position)
     if (hits.length > 0) {
@@ -263,6 +287,7 @@ export class Game {
     this.npcManager.dispose()
     this.aoeManager.dispose()
     this.bossManager.dispose()
+    this.numberSpriteManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
     this.arena.dispose()
