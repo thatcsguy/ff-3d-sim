@@ -4,15 +4,31 @@ import { ARENA_RADIUS } from './constants'
 export class Arena {
   private radius: number
   private mesh: THREE.Mesh | null = null
+  private textureLoader: THREE.TextureLoader
 
   constructor(radius: number = ARENA_RADIUS) {
     this.radius = radius
+    this.textureLoader = new THREE.TextureLoader()
   }
 
   create(scene: THREE.Scene): void {
     const geometry = new THREE.CircleGeometry(this.radius, 64)
+
+    // Scale UVs so the arena edge aligns with the golden ring outside the red gems
+    const uvScale = 0.93
+    const uvAttribute = geometry.attributes.uv
+    for (let i = 0; i < uvAttribute.count; i++) {
+      const u = uvAttribute.getX(i)
+      const v = uvAttribute.getY(i)
+      // Remap from [0,1] to centered and scaled
+      uvAttribute.setXY(i, (u - 0.5) * uvScale + 0.5, (v - 0.5) * uvScale + 0.5)
+    }
+
+    const texture = this.textureLoader.load('/textures/arena-floor.jpg')
+    texture.colorSpace = THREE.SRGBColorSpace
+
     const material = new THREE.MeshStandardMaterial({
-      color: 0x2d3436,
+      map: texture,
       side: THREE.DoubleSide,
     })
     this.mesh = new THREE.Mesh(geometry, material)
@@ -47,7 +63,10 @@ export class Arena {
   dispose(): void {
     if (this.mesh) {
       this.mesh.geometry.dispose()
-      if (this.mesh.material instanceof THREE.Material) {
+      if (this.mesh.material instanceof THREE.MeshStandardMaterial) {
+        if (this.mesh.material.map) {
+          this.mesh.material.map.dispose()
+        }
         this.mesh.material.dispose()
       }
     }
