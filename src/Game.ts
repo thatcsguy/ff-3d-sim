@@ -9,6 +9,7 @@ import { HUD } from './HUD'
 import { SettingsMenu } from './SettingsMenu'
 import { Timeline } from './Timeline'
 import { AoEManager } from './AoEManager'
+import { BossManager } from './BossManager'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -26,6 +27,7 @@ export class Game {
   private settingsMenu: SettingsMenu
   private timeline: Timeline
   private aoeManager: AoEManager
+  private bossManager: BossManager
 
   constructor() {
     // Renderer setup
@@ -108,6 +110,11 @@ export class Game {
     // Timeline and AoE manager setup
     this.timeline = new Timeline()
     this.aoeManager = new AoEManager(this.scene)
+
+    // Boss manager setup
+    this.bossManager = new BossManager()
+    this.bossManager.spawn(this.scene)
+
     this.setupTestTimeline()
 
     // Handle window resize
@@ -136,21 +143,42 @@ export class Game {
       },
     })
 
-    // Test line AoE (Limit Cut dash style)
+    // Test Cruise Chaser spawn and Limit Cut dash
+    this.timeline.addEvent({
+      id: 'test-cc-spawn',
+      time: 3.0,
+      handler: () => {
+        // Show Cruise Chaser at west side of arena
+        this.bossManager.show(
+          'cruiseChaser',
+          new THREE.Vector3(-10, 0, 0)
+        )
+        // Face east (toward center)
+        this.bossManager.setRotation('cruiseChaser', Math.PI / 2)
+      },
+    })
+
+    // Test line AoE (Limit Cut dash style) - CC dashes through center
     this.timeline.addEvent({
       id: 'test-line-aoe-1',
-      time: 3.0, // Spawn after 3 seconds
+      time: 4.0, // After CC appears
       handler: () => {
         this.aoeManager.spawn({
           id: 'line-aoe-1',
           shape: 'line',
-          position: new THREE.Vector3(5, 0, 0), // Right side of arena
-          length: 15,
+          position: new THREE.Vector3(0, 0, 0), // Center of arena
+          length: 20, // Full arena width
           width: 2,
-          rotation: Math.PI / 4, // 45 degrees
+          rotation: Math.PI / 2, // East-West line (90 degrees)
           telegraphDuration: 1.5,
           onResolve: () => {
-            console.log('Line AoE resolved!')
+            console.log('Cruise Chaser dash resolved!')
+            // Teleport CC to east side after dash
+            this.bossManager.setPosition(
+              'cruiseChaser',
+              new THREE.Vector3(10, 0, 0)
+            )
+            this.bossManager.setRotation('cruiseChaser', -Math.PI / 2)
           },
         })
       },
@@ -198,6 +226,9 @@ export class Game {
     // Update timeline
     this.timeline.update(deltaTime)
 
+    // Update bosses
+    this.bossManager.update(deltaTime)
+
     // Update AoEs and check for hits
     const hits = this.aoeManager.update(deltaTime, this.playerMesh.position)
     if (hits.length > 0) {
@@ -231,6 +262,7 @@ export class Game {
     this.settingsMenu.dispose()
     this.npcManager.dispose()
     this.aoeManager.dispose()
+    this.bossManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
     this.arena.dispose()
@@ -271,5 +303,9 @@ export class Game {
 
   getSettingsMenu(): SettingsMenu {
     return this.settingsMenu
+  }
+
+  getBossManager(): BossManager {
+    return this.bossManager
   }
 }
