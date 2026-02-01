@@ -25,6 +25,15 @@ interface JumpAnimation {
   onComplete?: () => void
 }
 
+interface DashAnimation {
+  bossType: BossType
+  startPosition: THREE.Vector3
+  endPosition: THREE.Vector3
+  duration: number
+  elapsed: number
+  onComplete?: () => void
+}
+
 // Boss dimensions and colors
 const BOSS_CONFIG = {
   cruiseChaser: {
@@ -52,6 +61,7 @@ export class BossManager {
   private bosses: Map<BossType, Boss> = new Map()
   private scene: THREE.Scene | null = null
   private activeJump: JumpAnimation | null = null
+  private activeDash: DashAnimation | null = null
 
   constructor() {}
 
@@ -290,43 +300,135 @@ export class BossManager {
   }
 
   /**
+   * Start a fast linear dash animation for a boss.
+   * The boss will move in a straight line from start through target to end position.
+   *
+   * @param type Boss to animate
+   * @param targetPosition Position the boss is dashing towards
+   * @param endPosition Final position (typically outside arena)
+   * @param duration Time in seconds for the dash
+   * @param onComplete Optional callback when dash finishes
+   */
+  startDash(
+    type: BossType,
+    targetPosition: THREE.Vector3,
+    endPosition: THREE.Vector3,
+    duration: number,
+    onComplete?: () => void
+  ): void {
+    const boss = this.bosses.get(type)
+    if (!boss) return
+
+    const startPosition = boss.mesh.position.clone()
+    const startGround = new THREE.Vector3(startPosition.x, 0, startPosition.z)
+    const endGround = new THREE.Vector3(endPosition.x, 0, endPosition.z)
+
+    // Face the target before dashing
+    this.lookAt(type, targetPosition)
+
+    this.activeDash = {
+      bossType: type,
+      startPosition: startGround,
+      endPosition: endGround,
+      duration,
+      elapsed: 0,
+      onComplete,
+    }
+  }
+
+  /**
+   * Check if a boss is currently dashing.
+   */
+  isDashing(type: BossType): boolean {
+    return this.activeDash?.bossType === type
+  }
+
+  /**
+   * Rotate a boss to face a target position.
+   * @param type Boss to rotate
+   * @param targetPosition Position to face (Y is ignored)
+   */
+  lookAt(type: BossType, targetPosition: THREE.Vector3): void {
+    const boss = this.bosses.get(type)
+    if (!boss) return
+
+    const bossPos = boss.mesh.position
+    const dx = targetPosition.x - bossPos.x
+    const dz = targetPosition.z - bossPos.z
+    // atan2(dx, dz) gives angle where 0 = +Z, positive = clockwise
+    const angle = Math.atan2(dx, dz)
+    boss.mesh.rotation.y = angle
+  }
+
+  /**
    * Update boss state (called each frame).
-   * Handles jump arc animations.
+   * Handles jump arc and dash animations.
    */
   update(deltaTime: number): void {
-    if (!this.activeJump) return
+    // Handle jump animation
+    if (this.activeJump) {
+      this.activeJump.elapsed += deltaTime
+      const t = Math.min(this.activeJump.elapsed / this.activeJump.duration, 1)
 
-    this.activeJump.elapsed += deltaTime
-    const t = Math.min(this.activeJump.elapsed / this.activeJump.duration, 1)
+      const boss = this.bosses.get(this.activeJump.bossType)
+      if (!boss) {
+        this.activeJump = null
+      } else {
+        // Linear interpolation for XZ position
+        const x =
+          this.activeJump.startPosition.x +
+          (this.activeJump.endPosition.x - this.activeJump.startPosition.x) * t
+        const z =
+          this.activeJump.startPosition.z +
+          (this.activeJump.endPosition.z - this.activeJump.startPosition.z) * t
 
-    const boss = this.bosses.get(this.activeJump.bossType)
-    if (!boss) {
-      this.activeJump = null
-      return
+        // Parabolic arc for Y: peaks at t=0.5
+        // y = 4 * peakHeight * t * (1 - t)
+        const arcY = 4 * this.activeJump.peakHeight * t * (1 - t)
+        const bossHeight = this.getBossHeight(this.activeJump.bossType)
+        const y = arcY + bossHeight / 2
+
+        boss.mesh.position.set(x, y, z)
+
+        // Animation complete
+        if (t >= 1) {
+          const onComplete = this.activeJump.onComplete
+          this.activeJump = null
+          if (onComplete) {
+            onComplete()
+          }
+        }
+      }
     }
 
-    // Linear interpolation for XZ position
-    const x =
-      this.activeJump.startPosition.x +
-      (this.activeJump.endPosition.x - this.activeJump.startPosition.x) * t
-    const z =
-      this.activeJump.startPosition.z +
-      (this.activeJump.endPosition.z - this.activeJump.startPosition.z) * t
+    // Handle dash animation
+    if (this.activeDash) {
+      this.activeDash.elapsed += deltaTime
+      const t = Math.min(this.activeDash.elapsed / this.activeDash.duration, 1)
 
-    // Parabolic arc for Y: peaks at t=0.5
-    // y = 4 * peakHeight * t * (1 - t)
-    const arcY = 4 * this.activeJump.peakHeight * t * (1 - t)
-    const bossHeight = this.getBossHeight(this.activeJump.bossType)
-    const y = arcY + bossHeight / 2
+      const boss = this.bosses.get(this.activeDash.bossType)
+      if (!boss) {
+        this.activeDash = null
+      } else {
+        // Linear interpolation for XZ position
+        const x =
+          this.activeDash.startPosition.x +
+          (this.activeDash.endPosition.x - this.activeDash.startPosition.x) * t
+        const z =
+          this.activeDash.startPosition.z +
+          (this.activeDash.endPosition.z - this.activeDash.startPosition.z) * t
 
-    boss.mesh.position.set(x, y, z)
+        const bossHeight = this.getBossHeight(this.activeDash.bossType)
+        boss.mesh.position.set(x, bossHeight / 2, z)
 
-    // Animation complete
-    if (t >= 1) {
-      const onComplete = this.activeJump.onComplete
-      this.activeJump = null
-      if (onComplete) {
-        onComplete()
+        // Animation complete
+        if (t >= 1) {
+          const onComplete = this.activeDash.onComplete
+          this.activeDash = null
+          if (onComplete) {
+            onComplete()
+          }
+        }
       }
     }
   }

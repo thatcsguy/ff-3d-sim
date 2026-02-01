@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * AoE (Area of Effect) types supported by the system.
  */
-export type AoEShape = 'circle' | 'line' | 'cone' | 'tshape' | 'puddle'
+export type AoEShape = 'circle' | 'line' | 'cone' | 'tshape' | 'puddle' | 'plus'
 
 /**
  * Configuration for spawning an AoE.
@@ -21,6 +21,9 @@ export interface AoEConfig {
   stemWidth?: number // for tshape: width of the vertical stem
   barLength?: number // for tshape: length of the horizontal bar
   barWidth?: number // for tshape: width of the horizontal bar
+  // Plus-specific options
+  armLength?: number // for plus: length of each arm from center
+  armWidth?: number // for plus: width of each arm
   telegraphDuration: number // how long the telegraph shows before resolving (seconds)
   // Puddle-specific options
   soakRadius?: number // for puddle: initial radius
@@ -134,12 +137,15 @@ export class AoEManager {
         const rotation = config.rotation ?? 0
         // CircleSectorGeometry: create a pie-slice shape
         // thetaStart and thetaLength define the arc
-        // We center the cone on the rotation angle
+        // CircleGeometry theta=0 points toward +X in local XY plane.
+        // After rotation.x=-π/2 to lay flat: local +Y becomes world -Z, local -Y becomes world +Z.
+        // We want rotation=0 to point toward +Z (matching atan2(x,z) convention used in collision).
+        // So we center the cone at theta=-π/2 (local -Y), which becomes world +Z after laying flat.
         const segments = 32
         geometry = new THREE.CircleGeometry(
           coneRadius,
           segments,
-          -coneAngle / 2, // thetaStart: offset by half the angle to center
+          -Math.PI / 2 - coneAngle / 2, // thetaStart: center at -Y local = +Z world
           coneAngle // thetaLength: the cone's angular width
         )
         mesh = new THREE.Mesh(geometry, material)
@@ -202,6 +208,31 @@ export class AoEManager {
         mesh.rotation.x = -Math.PI / 2
         return mesh
       }
+      case 'plus': {
+        // Plus/cross shape: two perpendicular rectangles
+        const armLength = config.armLength ?? 10
+        const armWidth = config.armWidth ?? 2
+        const rotation = config.rotation ?? 0
+
+        const group = new THREE.Group()
+
+        // Vertical arm (along Z before rotation)
+        const vertGeometry = new THREE.PlaneGeometry(armWidth, armLength * 2)
+        const vertMesh = new THREE.Mesh(vertGeometry, material.clone())
+        group.add(vertMesh)
+
+        // Horizontal arm (along X before rotation)
+        const horizGeometry = new THREE.PlaneGeometry(armLength * 2, armWidth)
+        const horizMesh = new THREE.Mesh(horizGeometry, material.clone())
+        group.add(horizMesh)
+
+        // Position and rotate the group
+        group.position.set(config.position.x, 0.01, config.position.z)
+        group.rotation.x = -Math.PI / 2
+        group.rotation.z = rotation
+
+        return group as unknown as THREE.Mesh
+      }
       default:
         throw new Error(`Unknown AoE shape: ${config.shape}`)
     }
@@ -253,67 +284,34 @@ export class AoEManager {
   }
 
   /**
-   * Update puddle AoE - handles soaking and shrinking.
-   * Puddles shrink as players stand in them.
+   * Update puddle AoE - purely visual, no automatic shrinking.
+   * Puddles only react at discrete check timestamps via checkPuddleSoak/respawnPuddle.
    */
   private updatePuddle(
     aoe: ActiveAoE,
-    deltaTime: number,
+    _deltaTime: number,
     playerPosition: THREE.Vector3
   ): void {
     if (aoe.resolved) return
 
-    const soakCount = aoe.config.soakCount ?? 3
     const initialRadius = aoe.config.soakRadius ?? aoe.config.radius ?? 2
-    const shrinkRate = aoe.config.shrinkRate ?? 1 / soakCount
+    const currentRadius = aoe.currentRadius ?? initialRadius
 
-    // Check if player is in the puddle using current radius
+    // Check if player is in the puddle (visual feedback only)
     const dx = playerPosition.x - aoe.config.position.x
     const dz = playerPosition.z - aoe.config.position.z
     const distanceSquared = dx * dx + dz * dz
-    const currentRadius = aoe.currentRadius ?? initialRadius
     const isInPuddle = distanceSquared <= currentRadius * currentRadius
 
-    if (isInPuddle) {
-      // Player is soaking - shrink the puddle over time
-      // Shrink continuously while player is inside
-      const shrinkSpeed = shrinkRate * 2 // Shrink one soak worth every 0.5s
-      aoe.currentRadius = Math.max(0, currentRadius - shrinkSpeed * deltaTime * initialRadius)
+    // Visual feedback: brighten while player is inside
+    const material = aoe.mesh.material as THREE.MeshBasicMaterial
+    material.opacity = isInPuddle ? PUDDLE_OPACITY + 0.2 : PUDDLE_OPACITY
 
-      // Update the mesh scale to match current radius
-      const scale = aoe.currentRadius / initialRadius
-      aoe.mesh.scale.set(scale, scale, 1)
-
-      // Visual feedback: brighten while soaking
-      const material = aoe.mesh.material as THREE.MeshBasicMaterial
-      material.opacity = PUDDLE_OPACITY + 0.2
-
-      // Check if fully soaked
-      if (aoe.currentRadius <= 0.1) {
-        aoe.resolved = true
-        // Success flash (green) for proper soak
-        material.color.setHex(0x2ecc71)
-        material.opacity = 0.8
-        if (aoe.config.onResolve) {
-          aoe.config.onResolve()
-        }
-        setTimeout(() => this.remove(aoe.config.id), 200)
-      }
-    } else {
-      // Player not in puddle - reset visual
-      const material = aoe.mesh.material as THREE.MeshBasicMaterial
-      material.opacity = PUDDLE_OPACITY
-    }
-
-    // Check if puddle duration expired without being soaked
+    // Check if puddle duration expired
     if (aoe.elapsedTime >= aoe.config.telegraphDuration && !aoe.resolved) {
       aoe.resolved = true
-      // Failure flash (red) for missed soak
-      const material = aoe.mesh.material as THREE.MeshBasicMaterial
       material.color.setHex(0xe74c3c)
       material.opacity = 0.8
-      // Note: For now, missing a puddle soak doesn't count as a hit
-      // In the real mechanic, someone else might soak it
       if (aoe.config.onResolve) {
         aoe.config.onResolve()
       }
@@ -325,8 +323,8 @@ export class AoEManager {
    * Flash the AoE to indicate resolution.
    */
   private flashAoE(aoe: ActiveAoE): void {
-    // T-shape uses a Group with multiple meshes
-    if (aoe.config.shape === 'tshape') {
+    // T-shape and plus use a Group with multiple meshes
+    if (aoe.config.shape === 'tshape' || aoe.config.shape === 'plus') {
       const group = aoe.mesh as unknown as THREE.Group
       group.children.forEach((child) => {
         if (child instanceof THREE.Mesh) {
@@ -427,6 +425,31 @@ export class AoEManager {
         const puddleRadius = config.soakRadius ?? config.radius ?? 2
         return distanceSquared <= puddleRadius * puddleRadius
       }
+      case 'plus': {
+        // Plus: check if player is in either arm (cross pattern)
+        const dx = playerPosition.x - config.position.x
+        const dz = playerPosition.z - config.position.z
+        const rotation = config.rotation ?? 0
+        // Rotate point by -rotation to align with AoE local axes
+        const cos = Math.cos(-rotation)
+        const sin = Math.sin(-rotation)
+        const localX = dx * cos - dz * sin
+        const localZ = dx * sin + dz * cos
+
+        const armLength = config.armLength ?? 10
+        const armWidth = config.armWidth ?? 2
+        const halfWidth = armWidth / 2
+
+        // Check vertical arm (along local Z)
+        const inVerticalArm =
+          Math.abs(localX) <= halfWidth && Math.abs(localZ) <= armLength
+
+        // Check horizontal arm (along local X)
+        const inHorizontalArm =
+          Math.abs(localZ) <= halfWidth && Math.abs(localX) <= armLength
+
+        return inVerticalArm || inHorizontalArm
+      }
       default:
         return false
     }
@@ -439,8 +462,8 @@ export class AoEManager {
     const aoe = this.activeAoEs.get(id)
     if (aoe) {
       this.scene.remove(aoe.mesh)
-      // T-shape uses a Group with multiple meshes
-      if (aoe.config.shape === 'tshape') {
+      // T-shape and plus use a Group with multiple meshes
+      if (aoe.config.shape === 'tshape' || aoe.config.shape === 'plus') {
         const group = aoe.mesh as unknown as THREE.Group
         group.children.forEach((child) => {
           if (child instanceof THREE.Mesh) {
@@ -481,5 +504,58 @@ export class AoEManager {
    */
   getActiveCount(): number {
     return this.activeAoEs.size
+  }
+
+  /**
+   * Check if any party member is soaking a puddle (discrete check).
+   * Returns true if any position in the array is inside the puddle.
+   * Does NOT remove the puddle automatically.
+   * @param id Puddle ID to check
+   * @param positions Array of Vector3 positions to check (player + NPCs)
+   */
+  checkPuddleSoak(id: string, positions: THREE.Vector3[]): boolean {
+    const aoe = this.activeAoEs.get(id)
+    if (!aoe || aoe.config.shape !== 'puddle') return false
+
+    const currentRadius = aoe.currentRadius ?? aoe.config.soakRadius ?? aoe.config.radius ?? 2
+    const centerX = aoe.config.position.x
+    const centerZ = aoe.config.position.z
+
+    for (const pos of positions) {
+      const dx = pos.x - centerX
+      const dz = pos.z - centerZ
+      const distanceSquared = dx * dx + dz * dz
+      if (distanceSquared <= currentRadius * currentRadius) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Respawn a puddle at the same center with a new radius.
+   * Removes the old puddle and creates a new one.
+   * @param id Puddle ID to respawn
+   * @param newRadius New radius for the puddle
+   * @param telegraphDuration Duration before puddle must be soaked
+   */
+  respawnPuddle(id: string, newRadius: number, telegraphDuration: number): void {
+    const aoe = this.activeAoEs.get(id)
+    if (!aoe || aoe.config.shape !== 'puddle') return
+
+    const position = aoe.config.position.clone()
+
+    // Remove old puddle
+    this.remove(id)
+
+    // Spawn new puddle at same position
+    this.spawn({
+      id,
+      shape: 'puddle',
+      position,
+      soakRadius: newRadius,
+      soakCount: 1,
+      telegraphDuration,
+    })
   }
 }

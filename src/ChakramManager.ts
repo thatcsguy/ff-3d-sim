@@ -21,6 +21,7 @@ interface ActiveChakram {
   mesh: THREE.Group
   elapsedTime: number
   resolved: boolean
+  stationary: boolean // If true, doesn't move until startMovement() is called
 }
 
 // Chakram visual colors
@@ -57,7 +58,43 @@ export class ChakramManager {
       mesh,
       elapsedTime: 0,
       resolved: false,
+      stationary: false,
     })
+  }
+
+  /**
+   * Spawn a stationary chakram that doesn't move until startMovement() is called.
+   */
+  spawnStationary(config: ChakramConfig): void {
+    if (this.activeChakrams.has(config.id)) {
+      console.warn(`Chakram with id "${config.id}" already exists`)
+      return
+    }
+
+    const mesh = this.createMesh(config)
+    mesh.position.set(config.startPosition.x, 1.0, config.startPosition.z)
+    this.scene.add(mesh)
+
+    this.activeChakrams.set(config.id, {
+      config,
+      mesh,
+      elapsedTime: 0,
+      resolved: false,
+      stationary: true,
+    })
+  }
+
+  /**
+   * Start movement for a stationary chakram.
+   */
+  startMovement(id: string): void {
+    const chakram = this.activeChakrams.get(id)
+    if (!chakram) {
+      console.warn(`Chakram with id "${id}" not found`)
+      return
+    }
+    chakram.stationary = false
+    chakram.elapsedTime = 0
   }
 
   /**
@@ -112,6 +149,14 @@ export class ChakramManager {
     const hits: string[] = []
 
     for (const [id, chakram] of this.activeChakrams) {
+      // Always spin the chakram
+      chakram.mesh.rotation.y += this.spinSpeed * deltaTime
+
+      // Skip movement logic for stationary chakrams
+      if (chakram.stationary) {
+        continue
+      }
+
       chakram.elapsedTime += deltaTime
 
       // Calculate progress (0 to 1)
@@ -125,9 +170,6 @@ export class ChakramManager {
         chakram.config.startPosition.z +
         (chakram.config.endPosition.z - chakram.config.startPosition.z) * progress
       chakram.mesh.position.set(currentX, 1.0, currentZ)
-
-      // Spin the chakram
-      chakram.mesh.rotation.y += this.spinSpeed * deltaTime
 
       // Check collision with player
       if (!chakram.resolved) {

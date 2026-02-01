@@ -160,153 +160,95 @@ export class Game {
    * Get Braindead strategy positions for a given phase.
    * Returns a Map of party number (1-8) to position.
    *
-   * Braindead strategy:
-   * - Odds (1,3,5,7) go West (-X)
-   * - Evens (2,4,6,8) go East (+X)
-   * - 1/2 and 5/6 resolve north (-Z), 3/4 and 7/8 resolve south (+Z)
+   * Wormhole Formation positions - matching accurate FFXIV mechanic.
    */
   private getBraindeadPositions(phase: string): Map<number, THREE.Vector3> {
     const positions = new Map<number, THREE.Vector3>()
     const y = PLAYER_HEIGHT / 2
 
-    // Positions relative to arena (arena radius ~18m)
-    const westX = -8
-    const eastX = 8
-    const northZ = -8
-    const southZ = 8
-    const centerZ = 0
-    const farWestX = -12
-    const farEastX = 12
+    // Arena radius is ~18m, puddles touch wall at E/W
+    const puddleX = ARENA_RADIUS - 0.2 * ARENA_RADIUS // Puddle center (touching wall)
+    const safeX = 8 // Safe spot X for avoiding mechanics
+    const safeZ = 8 // Safe spot Z
 
     switch (phase) {
       case 'start':
-        // Everyone stacks center
+        // Everyone stacks center at start
         for (let i = 1; i <= 8; i++) {
           positions.set(i, new THREE.Vector3(0, y, 0))
         }
         break
 
       case 'spread':
-        // After chakrams, odds go west, evens go east
-        // Spread out vertically based on number pairs
-        positions.set(1, new THREE.Vector3(westX, y, northZ - 2)) // 1 north-west, top
-        positions.set(2, new THREE.Vector3(eastX, y, northZ - 2)) // 2 north-east, top
-        positions.set(3, new THREE.Vector3(westX, y, southZ + 2)) // 3 south-west, bottom
-        positions.set(4, new THREE.Vector3(eastX, y, southZ + 2)) // 4 south-east, bottom
-        positions.set(5, new THREE.Vector3(westX, y, northZ + 2)) // 5 north-west, below 1
-        positions.set(6, new THREE.Vector3(eastX, y, northZ + 2)) // 6 north-east, below 2
-        positions.set(7, new THREE.Vector3(westX, y, southZ - 2)) // 7 south-west, above 3
-        positions.set(8, new THREE.Vector3(eastX, y, southZ - 2)) // 8 south-east, above 4
+        // After boss spawn, spread to numbered positions
+        // 1-4 north half, 5-8 south half
+        // Odds west, evens east
+        positions.set(1, new THREE.Vector3(-safeX, y, -safeZ))
+        positions.set(2, new THREE.Vector3(safeX, y, -safeZ))
+        positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
+        positions.set(4, new THREE.Vector3(safeX, y, -safeZ / 2))
+        positions.set(5, new THREE.Vector3(-safeX, y, safeZ / 2))
+        positions.set(6, new THREE.Vector3(safeX, y, safeZ / 2))
+        positions.set(7, new THREE.Vector3(-safeX, y, safeZ))
+        positions.set(8, new THREE.Vector3(safeX, y, safeZ))
         break
 
-      case 'limit-cut-1-2':
-        // 1 and 2 go north to bait first Limit Cut
-        // Others stay at sides
-        positions.set(1, new THREE.Vector3(westX - 2, y, northZ))
-        positions.set(2, new THREE.Vector3(eastX + 2, y, northZ))
-        positions.set(3, new THREE.Vector3(westX, y, southZ))
-        positions.set(4, new THREE.Vector3(eastX, y, southZ))
-        positions.set(5, new THREE.Vector3(farWestX, y, centerZ - 3)) // 5 far west, moving to puddle
-        positions.set(6, new THREE.Vector3(farEastX, y, centerZ - 3)) // 6 far east, moving to puddle
-        positions.set(7, new THREE.Vector3(westX, y, centerZ))
-        positions.set(8, new THREE.Vector3(eastX, y, centerZ))
+      case 'bj-bait':
+        // #1 goes to far position to bait BJ Super Jump
+        // Others spread along sides
+        positions.set(1, new THREE.Vector3(0, y, safeZ + 4)) // Farthest from BJ (north)
+        positions.set(2, new THREE.Vector3(safeX, y, -safeZ / 2))
+        positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
+        positions.set(4, new THREE.Vector3(safeX, y, 0))
+        positions.set(5, new THREE.Vector3(-puddleX, y, 0)) // West puddle soak ready
+        positions.set(6, new THREE.Vector3(puddleX, y, 0)) // East puddle soak ready
+        positions.set(7, new THREE.Vector3(-safeX, y, safeZ / 2))
+        positions.set(8, new THREE.Vector3(safeX, y, safeZ / 2))
         break
 
       case 'puddle-1':
-        // 5/6 soak first puddles (far west/east)
-        positions.set(1, new THREE.Vector3(westX, y, northZ))
-        positions.set(2, new THREE.Vector3(eastX, y, northZ))
-        positions.set(3, new THREE.Vector3(westX, y, southZ))
-        positions.set(4, new THREE.Vector3(eastX, y, southZ))
-        positions.set(5, new THREE.Vector3(farWestX, y, centerZ)) // 5 soaking west puddle
-        positions.set(6, new THREE.Vector3(farEastX, y, centerZ)) // 6 soaking east puddle
-        positions.set(7, new THREE.Vector3(westX, y, centerZ))
-        positions.set(8, new THREE.Vector3(eastX, y, centerZ))
-        break
-
-      case 'limit-cut-3-4':
-        // 3/4 go south, 3 baits Super Jump
-        // 5/6 swap north with 1/2
-        positions.set(1, new THREE.Vector3(westX, y, centerZ + 2))
-        positions.set(2, new THREE.Vector3(eastX, y, centerZ + 2))
-        positions.set(3, new THREE.Vector3(westX - 2, y, southZ)) // 3 baits Super Jump
-        positions.set(4, new THREE.Vector3(eastX + 2, y, southZ))
-        positions.set(5, new THREE.Vector3(westX, y, northZ)) // 5 now north
-        positions.set(6, new THREE.Vector3(eastX, y, northZ)) // 6 now north
-        positions.set(7, new THREE.Vector3(farWestX, y, centerZ - 2)) // 7 moving to puddle
-        positions.set(8, new THREE.Vector3(farEastX, y, centerZ - 2)) // 8 moving to puddle
+        // #5/#6 soak E/W puddles (first soak)
+        positions.set(1, new THREE.Vector3(0, y, safeZ))
+        positions.set(2, new THREE.Vector3(safeX, y, -safeZ / 2))
+        positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
+        positions.set(4, new THREE.Vector3(safeX, y, 0))
+        positions.set(5, new THREE.Vector3(-puddleX, y, 0)) // Soaking west
+        positions.set(6, new THREE.Vector3(puddleX, y, 0)) // Soaking east
+        positions.set(7, new THREE.Vector3(-safeX, y, safeZ / 2))
+        positions.set(8, new THREE.Vector3(safeX, y, safeZ / 2))
         break
 
       case 'puddle-2':
-        // 7/8 soak second puddles
-        positions.set(1, new THREE.Vector3(westX, y, centerZ))
-        positions.set(2, new THREE.Vector3(eastX, y, centerZ))
-        positions.set(3, new THREE.Vector3(westX, y, southZ - 4)) // 3 dodging Apoc Ray
-        positions.set(4, new THREE.Vector3(eastX, y, southZ - 4)) // 4 dodging Apoc Ray
-        positions.set(5, new THREE.Vector3(westX, y, northZ))
-        positions.set(6, new THREE.Vector3(eastX, y, northZ))
-        positions.set(7, new THREE.Vector3(farWestX, y, centerZ)) // 7 soaking west puddle
-        positions.set(8, new THREE.Vector3(farEastX, y, centerZ)) // 8 soaking east puddle
-        break
-
-      case 'limit-cut-5-6':
-        // 5/6 bait north
-        // 1/2 move to puddles
-        positions.set(1, new THREE.Vector3(farWestX, y, centerZ - 2)) // 1 moving to puddle
-        positions.set(2, new THREE.Vector3(farEastX, y, centerZ - 2)) // 2 moving to puddle
-        positions.set(3, new THREE.Vector3(westX, y, southZ))
-        positions.set(4, new THREE.Vector3(eastX, y, southZ))
-        positions.set(5, new THREE.Vector3(westX - 2, y, northZ)) // 5 baiting
-        positions.set(6, new THREE.Vector3(eastX + 2, y, northZ)) // 6 baiting
-        positions.set(7, new THREE.Vector3(westX, y, centerZ))
-        positions.set(8, new THREE.Vector3(eastX, y, centerZ))
+        // #7/#8 soak E/W puddles (second soak - half radius)
+        positions.set(1, new THREE.Vector3(0, y, safeZ))
+        positions.set(2, new THREE.Vector3(safeX, y, -safeZ / 2))
+        positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
+        positions.set(4, new THREE.Vector3(safeX, y, 0))
+        positions.set(5, new THREE.Vector3(-safeX, y, safeZ / 2))
+        positions.set(6, new THREE.Vector3(safeX, y, safeZ / 2))
+        positions.set(7, new THREE.Vector3(-puddleX, y, 0)) // Soaking west
+        positions.set(8, new THREE.Vector3(puddleX, y, 0)) // Soaking east
         break
 
       case 'puddle-3':
-        // 1/2 soak third puddles
-        positions.set(1, new THREE.Vector3(farWestX, y, centerZ)) // 1 soaking west puddle
-        positions.set(2, new THREE.Vector3(farEastX, y, centerZ)) // 2 soaking east puddle
-        positions.set(3, new THREE.Vector3(westX, y, southZ))
-        positions.set(4, new THREE.Vector3(eastX, y, southZ))
-        positions.set(5, new THREE.Vector3(westX, y, northZ))
-        positions.set(6, new THREE.Vector3(eastX, y, northZ))
-        positions.set(7, new THREE.Vector3(westX, y, centerZ - 3))
-        positions.set(8, new THREE.Vector3(eastX, y, centerZ - 3))
+        // Final soak - quarter radius
+        positions.set(1, new THREE.Vector3(-puddleX, y, 0)) // #1 soak west
+        positions.set(2, new THREE.Vector3(puddleX, y, 0)) // #2 soak east
+        positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
+        positions.set(4, new THREE.Vector3(safeX, y, -safeZ / 2))
+        positions.set(5, new THREE.Vector3(-safeX, y, safeZ / 2))
+        positions.set(6, new THREE.Vector3(safeX, y, safeZ / 2))
+        positions.set(7, new THREE.Vector3(-safeX, y, safeZ))
+        positions.set(8, new THREE.Vector3(safeX, y, safeZ))
         break
 
-      case 'limit-cut-7-8':
-        // 7/8 bait south
-        positions.set(1, new THREE.Vector3(westX, y, centerZ))
-        positions.set(2, new THREE.Vector3(eastX, y, centerZ))
-        positions.set(3, new THREE.Vector3(westX, y, southZ - 4))
-        positions.set(4, new THREE.Vector3(eastX, y, southZ - 4))
-        positions.set(5, new THREE.Vector3(westX, y, northZ))
-        positions.set(6, new THREE.Vector3(eastX, y, northZ))
-        positions.set(7, new THREE.Vector3(westX - 2, y, southZ)) // 7 baiting
-        positions.set(8, new THREE.Vector3(eastX + 2, y, southZ)) // 8 baiting
-        break
-
-      case 'sacrament':
-        // All dodge Sacrament - avoid center and edges
-        // Move to safe spots (sides of T-laser)
-        positions.set(1, new THREE.Vector3(westX, y, northZ - 2))
-        positions.set(2, new THREE.Vector3(eastX, y, northZ - 2))
-        positions.set(3, new THREE.Vector3(westX, y, northZ + 2))
-        positions.set(4, new THREE.Vector3(eastX, y, northZ + 2))
-        positions.set(5, new THREE.Vector3(westX - 4, y, northZ))
-        positions.set(6, new THREE.Vector3(eastX + 4, y, northZ))
-        positions.set(7, new THREE.Vector3(westX - 4, y, centerZ))
-        positions.set(8, new THREE.Vector3(eastX + 4, y, centerZ))
-        break
-
-      case 'stack':
-        // Final stack for Enumeration
+      case 'final':
+        // After all soaks, everyone moves to center
         for (let i = 1; i <= 8; i++) {
-          // Slight spread to avoid overlap
           const angle = ((i - 1) / 8) * Math.PI * 2
           positions.set(
             i,
-            new THREE.Vector3(Math.cos(angle) * 2, y, Math.sin(angle) * 2)
+            new THREE.Vector3(Math.cos(angle) * 3, y, Math.sin(angle) * 3)
           )
         }
         break
@@ -324,7 +266,120 @@ export class Game {
   }
 
   /**
-   * Setup the Wormhole Formation timeline with Braindead strategy.
+   * Get the mesh for a party member by their assigned number (1-8).
+   * Returns player mesh if partyNum matches playerNumber, otherwise returns NPC mesh.
+   */
+  private getEntityByNumber(partyNum: number): THREE.Mesh | null {
+    if (partyNum === this.playerNumber) {
+      return this.playerMesh
+    }
+    // NPCs fill slots not taken by player
+    let npcIndex = 0
+    for (let num = 1; num <= 8; num++) {
+      if (num === this.playerNumber) continue
+      if (num === partyNum) {
+        const meshes = this.npcManager.getMeshes()
+        return npcIndex < meshes.length ? meshes[npcIndex] : null
+      }
+      npcIndex++
+    }
+    return null
+  }
+
+  /**
+   * Get the position of a party member by their assigned number (1-8).
+   */
+  private getEntityPosition(partyNum: number): THREE.Vector3 | null {
+    const mesh = this.getEntityByNumber(partyNum)
+    return mesh ? mesh.position.clone() : null
+  }
+
+  /**
+   * Find the party member farthest from a given position.
+   * Returns the party number (1-8) of the farthest member.
+   */
+  private getFarthestPlayerFrom(position: THREE.Vector3): number {
+    let farthestNum = 1
+    let farthestDistSq = 0
+
+    for (let partyNum = 1; partyNum <= 8; partyNum++) {
+      const entityPos = this.getEntityPosition(partyNum)
+      if (!entityPos) continue
+
+      const dx = entityPos.x - position.x
+      const dz = entityPos.z - position.z
+      const distSq = dx * dx + dz * dz
+
+      if (distSq > farthestDistSq) {
+        farthestDistSq = distSq
+        farthestNum = partyNum
+      }
+    }
+
+    return farthestNum
+  }
+
+  /**
+   * Get positions of all party members (player + NPCs).
+   * Returns array of 8 Vector3 positions.
+   */
+  private getAllPartyPositions(): THREE.Vector3[] {
+    const positions: THREE.Vector3[] = []
+    for (let partyNum = 1; partyNum <= 8; partyNum++) {
+      const pos = this.getEntityPosition(partyNum)
+      if (pos) {
+        positions.push(pos)
+      }
+    }
+    return positions
+  }
+
+  /**
+   * Spawn Cruise Chaser cone attack on an odd-numbered player.
+   * - If target is NPC: CC spawns slightly toward arena center, cone fires outward
+   * - If target is player: CC spawns behind player (opposite facing), cone fires in facing direction
+   */
+  private spawnCruiseChaserCone(targetPlayerNum: number, coneId: string): void {
+    const targetPos = this.getEntityPosition(targetPlayerNum)!
+    const CC_OFFSET = 1 // How far CC spawns from the target
+
+    let ccPosition: THREE.Vector3
+    let coneRotation: number
+
+    if (targetPlayerNum === this.playerNumber) {
+      // Target is the human player - use camera facing direction
+      const forwardDir = this.cameraController.getForwardDirection()
+      // CC spawns behind player (opposite of facing)
+      ccPosition = targetPos.clone().sub(forwardDir.clone().multiplyScalar(CC_OFFSET))
+      // Cone fires in the direction the player is facing
+      coneRotation = Math.atan2(forwardDir.x, forwardDir.z)
+    } else {
+      // Target is an NPC - use arena-relative positioning
+      const toCenter = targetPos.clone().negate().normalize()
+      // CC spawns toward arena center from NPC
+      ccPosition = targetPos.clone().add(toCenter.clone().multiplyScalar(CC_OFFSET))
+      // Cone fires radially outward (away from center)
+      const outwardDir = targetPos.clone().normalize()
+      coneRotation = Math.atan2(outwardDir.x, outwardDir.z)
+    }
+
+    this.bossManager.show('cruiseChaser', ccPosition)
+    // Make CC face the cone direction
+    this.bossManager.setRotation('cruiseChaser', coneRotation)
+
+    this.aoeManager.spawn({
+      id: coneId,
+      shape: 'cone',
+      position: ccPosition,
+      radius: 5,
+      angle: Math.PI / 2, // 90°
+      rotation: coneRotation,
+      telegraphDuration: 0.5,
+    })
+  }
+
+  /**
+   * Setup the Wormhole Formation timeline matching accurate FFXIV mechanic.
    */
   private setupTestTimeline(): void {
     // Randomly assign player number (1-8)
@@ -333,22 +388,86 @@ export class Game {
     // Enable scripted NPC movement
     this.npcManager.setScriptedMode(true)
 
-    // Start with everyone at center
+    // Randomly choose BJ/CC spawn positions (NE or NW)
+    // Position them fully outside the arena (arena radius + boss radius)
+    // BJ is a box ~1.25m from center to corner, CC cylinder radius 0.6m
+    const bjDist = ARENA_RADIUS + 1.5 // Extra margin for BJ's box shape
+    const ccDist = ARENA_RADIUS + 1.0
+    const bjCoord = bjDist / Math.sqrt(2) // 45° angle
+    const ccCoord = ccDist / Math.sqrt(2)
+
+    const bjNorthEast = Math.random() < 0.5
+    const bjSpawnPos = bjNorthEast
+      ? new THREE.Vector3(bjCoord, 0, -bjCoord) // NE
+      : new THREE.Vector3(-bjCoord, 0, -bjCoord) // NW
+    const ccSpawnPos = bjNorthEast
+      ? new THREE.Vector3(-ccCoord, 0, -ccCoord) // NW (opposite)
+      : new THREE.Vector3(ccCoord, 0, -ccCoord) // NE (opposite)
+
+    // Puddle positions (touching E/W walls)
+    const puddleRadius = 0.4 * ARENA_RADIUS
+    const puddleX = ARENA_RADIUS - puddleRadius
+    const westPuddlePos = new THREE.Vector3(-puddleX, 0, 0)
+    const eastPuddlePos = new THREE.Vector3(puddleX, 0, 0)
+
+    // ==================== t=0: Spawn bosses ====================
     this.timeline.addEvent({
-      id: 'phase-start',
+      id: 'boss-spawn',
       time: 0.1,
       handler: () => {
         // Teleport all NPCs to center
         const startPos = this.getBraindeadPositions('start')
         this.npcManager.teleportByNumber(startPos, this.playerNumber)
         this.setNPCPositions('start')
+
+        // Alexander Prime south (fully outside arena - radius 1.0m)
+        this.bossManager.show('alexanderPrime', new THREE.Vector3(0, 0, ARENA_RADIUS + 1.5))
+        this.bossManager.lookAt('alexanderPrime', new THREE.Vector3(0, 0, 0))
+
+        // BJ and CC at NE/NW
+        this.bossManager.show('bruteJustice', bjSpawnPos)
+        this.bossManager.lookAt('bruteJustice', new THREE.Vector3(0, 0, 0))
+
+        this.bossManager.show('cruiseChaser', ccSpawnPos)
+        this.bossManager.lookAt('cruiseChaser', new THREE.Vector3(0, 0, 0))
       },
     })
 
-    // Assign number sprites
+    // ==================== t=2: Spawn chakrams E/S (stationary) ====================
+    this.timeline.addEvent({
+      id: 'chakrams-spawn',
+      time: 2.0,
+      handler: () => {
+        const travelTime = 2.0
+        const chakramRadius = 1.2
+        const hitRadius = 2.5
+
+        // East chakram (will travel west)
+        this.chakramManager.spawnStationary({
+          id: 'chakram-east',
+          startPosition: new THREE.Vector3(ARENA_RADIUS, 0, 0),
+          endPosition: new THREE.Vector3(-ARENA_RADIUS, 0, 0),
+          travelTime,
+          radius: chakramRadius,
+          hitRadius,
+        })
+
+        // South chakram (will travel north)
+        this.chakramManager.spawnStationary({
+          id: 'chakram-south',
+          startPosition: new THREE.Vector3(0, 0, ARENA_RADIUS),
+          endPosition: new THREE.Vector3(0, 0, -ARENA_RADIUS),
+          travelTime,
+          radius: chakramRadius,
+          hitRadius,
+        })
+      },
+    })
+
+    // ==================== t=7: Assign number markers ====================
     this.timeline.addEvent({
       id: 'numbers-assign',
-      time: 0.5,
+      time: 7.0,
       handler: () => {
         // Assign player their random number
         this.numberSpriteManager.assignNumber(
@@ -370,414 +489,378 @@ export class Game {
             npcIndex++
           }
         }
-      },
-    })
 
-    // Chakrams spawn at cardinals and cross through center
-    // Two pairs: North<->South and West<->East cross simultaneously
-    this.timeline.addEvent({
-      id: 'chakrams-spawn',
-      time: 2.0,
-      handler: () => {
-        const arenaEdge = 18 // Arena radius
-        const travelTime = 2.0 // Time to cross arena
-        const chakramRadius = 1.2
-        const hitRadius = 2.5 // Generous hit detection
-
-        // North to South chakram
-        this.chakramManager.spawn({
-          id: 'chakram-north',
-          startPosition: new THREE.Vector3(0, 0, -arenaEdge),
-          endPosition: new THREE.Vector3(0, 0, arenaEdge),
-          travelTime,
-          radius: chakramRadius,
-          hitRadius,
-        })
-
-        // South to North chakram
-        this.chakramManager.spawn({
-          id: 'chakram-south',
-          startPosition: new THREE.Vector3(0, 0, arenaEdge),
-          endPosition: new THREE.Vector3(0, 0, -arenaEdge),
-          travelTime,
-          radius: chakramRadius,
-          hitRadius,
-        })
-
-        // West to East chakram
-        this.chakramManager.spawn({
-          id: 'chakram-west',
-          startPosition: new THREE.Vector3(-arenaEdge, 0, 0),
-          endPosition: new THREE.Vector3(arenaEdge, 0, 0),
-          travelTime,
-          radius: chakramRadius,
-          hitRadius,
-        })
-
-        // East to West chakram
-        this.chakramManager.spawn({
-          id: 'chakram-east',
-          startPosition: new THREE.Vector3(arenaEdge, 0, 0),
-          endPosition: new THREE.Vector3(-arenaEdge, 0, 0),
-          travelTime,
-          radius: chakramRadius,
-          hitRadius,
-        })
-
-      },
-    })
-
-    // NPCs spread to sides after chakram telegraph appears
-    this.timeline.addEvent({
-      id: 'phase-spread',
-      time: 2.5,
-      handler: () => {
+        // NPCs spread out
         this.setNPCPositions('spread')
       },
     })
 
-    // Cruise Chaser spawns for Limit Cut
+    // ==================== t=11: Spawn puddles E/W ====================
     this.timeline.addEvent({
-      id: 'cc-spawn',
-      time: 4.5,
+      id: 'puddles-spawn',
+      time: 11.0,
       handler: () => {
-        this.bossManager.show('cruiseChaser', new THREE.Vector3(-10, 0, 0))
-        this.bossManager.setRotation('cruiseChaser', Math.PI / 2)
-      },
-    })
-
-    // Limit Cut 1/2 - CC dashes north
-    this.timeline.addEvent({
-      id: 'phase-limit-cut-1-2',
-      time: 5.0,
-      handler: () => {
-        this.setNPCPositions('limit-cut-1-2')
-      },
-    })
-
-    this.timeline.addEvent({
-      id: 'limit-cut-1-2-dash',
-      time: 5.5,
-      handler: () => {
+        // West puddle
         this.aoeManager.spawn({
-          id: 'lc-dash-1',
+          id: 'puddle-west',
+          shape: 'puddle',
+          position: westPuddlePos,
+          soakRadius: puddleRadius,
+          soakCount: 1,
+          telegraphDuration: 999, // Don't auto-resolve, we check manually
+        })
+
+        // East puddle
+        this.aoeManager.spawn({
+          id: 'puddle-east',
+          shape: 'puddle',
+          position: eastPuddlePos,
+          soakRadius: puddleRadius,
+          soakCount: 1,
+          telegraphDuration: 999,
+        })
+      },
+    })
+
+    // ==================== t=15: Chakrams fire across arena ====================
+    this.timeline.addEvent({
+      id: 'chakrams-fire',
+      time: 15.0,
+      handler: () => {
+        this.chakramManager.startMovement('chakram-east')
+        this.chakramManager.startMovement('chakram-south')
+      },
+    })
+
+    // ==================== t=16: BJ leap + CC teleport behind #1 ====================
+    this.timeline.addEvent({
+      id: 'bj-leap-cc-first',
+      time: 16.0,
+      handler: () => {
+        // BJ leaps to farthest player
+        const bjPos = this.bossManager.getPosition('bruteJustice')!
+        const farthestNum = this.getFarthestPlayerFrom(bjPos)
+        const targetPos = this.getEntityPosition(farthestNum)!
+
+        this.bossManager.startJumpArc(
+          'bruteJustice',
+          targetPos,
+          1.0, // 1 second jump
+          10,
+          () => {
+            // Face farthest player after landing
+            const newFarthest = this.getFarthestPlayerFrom(this.bossManager.getPosition('bruteJustice')!)
+            const newTarget = this.getEntityPosition(newFarthest)
+            if (newTarget) {
+              this.bossManager.lookAt('bruteJustice', newTarget)
+            }
+          }
+        )
+
+        // CC teleports to #1 and fires cone
+        this.spawnCruiseChaserCone(1, 'cc-cone-1')
+      },
+    })
+
+    // ==================== t=17: BJ lands (8y circular AoE) ====================
+    this.timeline.addEvent({
+      id: 'bj-land-aoe',
+      time: 17.0,
+      handler: () => {
+        const bjPos = this.bossManager.getPosition('bruteJustice')!
+        this.aoeManager.spawn({
+          id: 'bj-land',
+          shape: 'circle',
+          position: bjPos,
+          radius: 8,
+          telegraphDuration: 0.3,
+        })
+      },
+    })
+
+    // ==================== t=18: CC dash to #2, AP starts plus charge ====================
+    this.timeline.addEvent({
+      id: 'cc-dash-2-ap-charge',
+      time: 18.0,
+      handler: () => {
+        // CC dashes to #2 (line AoE + boss movement)
+        const ccPos = this.bossManager.getPosition('cruiseChaser')!
+        const player2Pos = this.getEntityPosition(2)!
+        const dashDir = player2Pos.clone().sub(ccPos).normalize()
+        // Extend dash through target and outside arena
+        const dashEndPos = ccPos.clone().add(dashDir.multiplyScalar(ARENA_RADIUS * 2.5))
+        const dashLength = ccPos.distanceTo(dashEndPos)
+        const dashCenter = ccPos.clone().add(dashEndPos).multiplyScalar(0.5)
+        const dashRotation = Math.atan2(dashDir.x, dashDir.z)
+
+        this.aoeManager.spawn({
+          id: 'cc-dash-2',
           shape: 'line',
-          position: new THREE.Vector3(0, 0, -8),
-          length: 20,
-          width: 2.5,
-          rotation: Math.PI / 2,
-          telegraphDuration: 1.2,
-          onResolve: () => {
-            this.bossManager.setPosition(
-              'cruiseChaser',
-              new THREE.Vector3(10, 0, -8)
-            )
-          },
+          position: dashCenter,
+          length: dashLength,
+          width: 2,
+          rotation: dashRotation,
+          telegraphDuration: 0.5,
+        })
+
+        // Start boss dash animation (very fast: 0.25s)
+        this.bossManager.startDash(
+          'cruiseChaser',
+          player2Pos,
+          dashEndPos,
+          0.25,
+          () => {
+            this.bossManager.hide('cruiseChaser')
+          }
+        )
+
+        // AP starts plus charge (telegraph shows)
+        const apPos = this.bossManager.getPosition('alexanderPrime')!
+        this.aoeManager.spawn({
+          id: 'ap-plus',
+          shape: 'plus',
+          position: apPos,
+          armLength: ARENA_RADIUS,
+          armWidth: 4,
+          telegraphDuration: 6.0, // Fires at t=24
+        })
+
+        // Move NPCs for BJ bait
+        this.setNPCPositions('bj-bait')
+      },
+    })
+
+    // ==================== t=19: BJ 90° arena-radius cone ====================
+    this.timeline.addEvent({
+      id: 'bj-cone',
+      time: 19.0,
+      handler: () => {
+        const bjPos = this.bossManager.getPosition('bruteJustice')!
+        const farthestNum = this.getFarthestPlayerFrom(bjPos)
+        const targetPos = this.getEntityPosition(farthestNum)!
+        this.bossManager.lookAt('bruteJustice', targetPos)
+
+        const coneDir = targetPos.clone().sub(bjPos).normalize()
+        const coneRotation = Math.atan2(coneDir.x, coneDir.z)
+
+        this.aoeManager.spawn({
+          id: 'bj-cone',
+          shape: 'cone',
+          position: bjPos,
+          radius: ARENA_RADIUS,
+          angle: Math.PI / 2, // 90°
+          rotation: coneRotation,
+          telegraphDuration: 1.0,
         })
       },
     })
 
-    // Spawn first puddles (west and east)
+    // ==================== t=20: CC teleport behind #3, cone ====================
     this.timeline.addEvent({
-      id: 'puddle-spawn-1',
-      time: 6.8,
+      id: 'cc-cone-3',
+      time: 20.0,
       handler: () => {
-        // West puddle (soaked by 5)
-        this.aoeManager.spawn({
-          id: 'puddle-1-west',
-          shape: 'puddle',
-          position: new THREE.Vector3(-12, 0, 0),
-          soakRadius: 2.5,
-          soakCount: 1,
-          telegraphDuration: 3.0,
-          onResolve: () => {
-          },
-        })
-        // East puddle (soaked by 6)
-        this.aoeManager.spawn({
-          id: 'puddle-1-east',
-          shape: 'puddle',
-          position: new THREE.Vector3(12, 0, 0),
-          soakRadius: 2.5,
-          soakCount: 1,
-          telegraphDuration: 3.0,
-          onResolve: () => {
-          },
-        })
-      },
-    })
+        // CC teleports to #3 and fires cone
+        this.spawnCruiseChaserCone(3, 'cc-cone-3')
 
-    // First puddle soak (5/6)
-    this.timeline.addEvent({
-      id: 'phase-puddle-1',
-      time: 7.0,
-      handler: () => {
+        // NPCs move to first puddle soak positions
         this.setNPCPositions('puddle-1')
       },
     })
 
-    // Limit Cut 3/4 + Super Jump bait
+    // ==================== t=21: First puddle soak check ====================
     this.timeline.addEvent({
-      id: 'phase-limit-cut-3-4',
-      time: 8.5,
+      id: 'puddle-check-1',
+      time: 21.0,
       handler: () => {
-        this.setNPCPositions('limit-cut-3-4')
+        const positions = this.getAllPartyPositions()
+        this.aoeManager.checkPuddleSoak('puddle-west', positions)
+        this.aoeManager.checkPuddleSoak('puddle-east', positions)
+        // Failure disabled for now
       },
     })
 
-    // Brute Justice spawns for Super Jump
+    // ==================== t=22: Puddles respawn half radius, CC dash to #4 ====================
     this.timeline.addEvent({
-      id: 'bj-spawn',
-      time: 9.0,
+      id: 'puddle-respawn-1',
+      time: 22.0,
       handler: () => {
-        this.bossManager.show('bruteJustice', new THREE.Vector3(0, 0, -12))
-        this.bossManager.setRotation('bruteJustice', Math.PI)
-      },
-    })
+        // Respawn puddles at half radius
+        this.aoeManager.respawnPuddle('puddle-west', puddleRadius / 2, 999)
+        this.aoeManager.respawnPuddle('puddle-east', puddleRadius / 2, 999)
 
-    this.timeline.addEvent({
-      id: 'limit-cut-3-4-dash',
-      time: 9.5,
-      handler: () => {
+        // CC dashes to #4 (line AoE + boss movement)
+        const ccPos = this.bossManager.getPosition('cruiseChaser')!
+        const player4Pos = this.getEntityPosition(4)!
+        const dashDir = player4Pos.clone().sub(ccPos).normalize()
+        // Extend dash through target and outside arena
+        const dashEndPos = ccPos.clone().add(dashDir.multiplyScalar(ARENA_RADIUS * 2.5))
+        const dashLength = ccPos.distanceTo(dashEndPos)
+        const dashCenter = ccPos.clone().add(dashEndPos).multiplyScalar(0.5)
+        const dashRotation = Math.atan2(dashDir.x, dashDir.z)
+
         this.aoeManager.spawn({
-          id: 'lc-dash-2',
+          id: 'cc-dash-4',
           shape: 'line',
-          position: new THREE.Vector3(0, 0, 8),
-          length: 20,
-          width: 2.5,
-          rotation: Math.PI / 2,
-          telegraphDuration: 1.2,
-          onResolve: () => {
-            this.bossManager.setPosition(
-              'cruiseChaser',
-              new THREE.Vector3(-10, 0, 8)
-            )
-          },
+          position: dashCenter,
+          length: dashLength,
+          width: 2,
+          rotation: dashRotation,
+          telegraphDuration: 0.5,
         })
-      },
-    })
 
-    // Super Jump starts - BJ arcs through the air to south
-    this.timeline.addEvent({
-      id: 'super-jump-start',
-      time: 10.0,
-      handler: () => {
-        // BJ jumps in an arc to south (1 second duration, 10m peak height)
-        this.bossManager.startJumpArc(
-          'bruteJustice',
-          new THREE.Vector3(0, 0, 10),
-          1.0,
-          10,
+        // Start boss dash animation (very fast: 0.25s)
+        this.bossManager.startDash(
+          'cruiseChaser',
+          player4Pos,
+          dashEndPos,
+          0.25,
           () => {
-            // Face north after landing
-            this.bossManager.setRotation('bruteJustice', 0)
+            this.bossManager.hide('cruiseChaser')
           }
         )
-      },
-    })
 
-    this.timeline.addEvent({
-      id: 'apocalyptic-ray',
-      time: 11.5,
-      handler: () => {
-        this.aoeManager.spawn({
-          id: 'apoc-ray',
-          shape: 'cone',
-          position: new THREE.Vector3(0, 0, 10),
-          radius: 15,
-          angle: Math.PI / 3,
-          rotation: 0, // Pointing north
-          telegraphDuration: 2.0,
-          onResolve: () => {
-          },
-        })
-      },
-    })
-
-    // Spawn second puddles
-    this.timeline.addEvent({
-      id: 'puddle-spawn-2',
-      time: 11.8,
-      handler: () => {
-        // West puddle (soaked by 7)
-        this.aoeManager.spawn({
-          id: 'puddle-2-west',
-          shape: 'puddle',
-          position: new THREE.Vector3(-12, 0, 0),
-          soakRadius: 2.5,
-          soakCount: 1,
-          telegraphDuration: 3.0,
-          onResolve: () => {
-          },
-        })
-        // East puddle (soaked by 8)
-        this.aoeManager.spawn({
-          id: 'puddle-2-east',
-          shape: 'puddle',
-          position: new THREE.Vector3(12, 0, 0),
-          soakRadius: 2.5,
-          soakCount: 1,
-          telegraphDuration: 3.0,
-          onResolve: () => {
-          },
-        })
-      },
-    })
-
-    // Second puddle soak (7/8)
-    this.timeline.addEvent({
-      id: 'phase-puddle-2',
-      time: 12.0,
-      handler: () => {
+        // NPCs move to second puddle soak positions
         this.setNPCPositions('puddle-2')
       },
     })
 
-    // Limit Cut 5/6
+    // ==================== t=24: AP plus fires, CC teleport behind #5 ====================
     this.timeline.addEvent({
-      id: 'phase-limit-cut-5-6',
-      time: 14.0,
+      id: 'ap-plus-fire-cc-5',
+      time: 24.0,
       handler: () => {
-        this.setNPCPositions('limit-cut-5-6')
+        // AP plus already resolves via telegraphDuration
+
+        // CC teleports to #5 and fires cone
+        this.spawnCruiseChaserCone(5, 'cc-cone-5')
       },
     })
 
+    // ==================== t=25: Second puddle soak check ====================
     this.timeline.addEvent({
-      id: 'limit-cut-5-6-dash',
-      time: 14.5,
+      id: 'puddle-check-2',
+      time: 25.0,
       handler: () => {
+        const positions = this.getAllPartyPositions()
+        this.aoeManager.checkPuddleSoak('puddle-west', positions)
+        this.aoeManager.checkPuddleSoak('puddle-east', positions)
+        // Failure disabled for now
+      },
+    })
+
+    // ==================== t=26: Puddles respawn quarter radius, CC dash to #6 ====================
+    this.timeline.addEvent({
+      id: 'puddle-respawn-2',
+      time: 26.0,
+      handler: () => {
+        // Respawn puddles at quarter radius
+        this.aoeManager.respawnPuddle('puddle-west', puddleRadius / 4, 999)
+        this.aoeManager.respawnPuddle('puddle-east', puddleRadius / 4, 999)
+
+        // CC dashes to #6 (line AoE + boss movement)
+        const ccPos = this.bossManager.getPosition('cruiseChaser')!
+        const player6Pos = this.getEntityPosition(6)!
+        const dashDir = player6Pos.clone().sub(ccPos).normalize()
+        // Extend dash through target and outside arena
+        const dashEndPos = ccPos.clone().add(dashDir.multiplyScalar(ARENA_RADIUS * 2.5))
+        const dashLength = ccPos.distanceTo(dashEndPos)
+        const dashCenter = ccPos.clone().add(dashEndPos).multiplyScalar(0.5)
+        const dashRotation = Math.atan2(dashDir.x, dashDir.z)
+
         this.aoeManager.spawn({
-          id: 'lc-dash-3',
+          id: 'cc-dash-6',
           shape: 'line',
-          position: new THREE.Vector3(0, 0, -8),
-          length: 20,
-          width: 2.5,
-          rotation: Math.PI / 2,
-          telegraphDuration: 1.2,
-          onResolve: () => {
-            this.bossManager.setPosition(
-              'cruiseChaser',
-              new THREE.Vector3(10, 0, -8)
-            )
-          },
+          position: dashCenter,
+          length: dashLength,
+          width: 2,
+          rotation: dashRotation,
+          telegraphDuration: 0.5,
         })
-      },
-    })
 
-    // Spawn third puddles
-    this.timeline.addEvent({
-      id: 'puddle-spawn-3',
-      time: 15.8,
-      handler: () => {
-        // West puddle (soaked by 1)
-        this.aoeManager.spawn({
-          id: 'puddle-3-west',
-          shape: 'puddle',
-          position: new THREE.Vector3(-12, 0, 0),
-          soakRadius: 2.5,
-          soakCount: 1,
-          telegraphDuration: 3.0,
-          onResolve: () => {
-          },
-        })
-        // East puddle (soaked by 2)
-        this.aoeManager.spawn({
-          id: 'puddle-3-east',
-          shape: 'puddle',
-          position: new THREE.Vector3(12, 0, 0),
-          soakRadius: 2.5,
-          soakCount: 1,
-          telegraphDuration: 3.0,
-          onResolve: () => {
-          },
-        })
-      },
-    })
+        // Start boss dash animation (very fast: 0.25s)
+        this.bossManager.startDash(
+          'cruiseChaser',
+          player6Pos,
+          dashEndPos,
+          0.25,
+          () => {
+            this.bossManager.hide('cruiseChaser')
+          }
+        )
 
-    // Third puddle soak (1/2)
-    this.timeline.addEvent({
-      id: 'phase-puddle-3',
-      time: 16.0,
-      handler: () => {
+        // NPCs move to final puddle soak positions
         this.setNPCPositions('puddle-3')
       },
     })
 
-    // Limit Cut 7/8
+    // ==================== t=28: CC teleport behind #7 ====================
     this.timeline.addEvent({
-      id: 'phase-limit-cut-7-8',
-      time: 17.5,
+      id: 'cc-cone-7',
+      time: 28.0,
       handler: () => {
-        this.setNPCPositions('limit-cut-7-8')
+        // CC teleports to #7 and fires cone
+        this.spawnCruiseChaserCone(7, 'cc-cone-7')
       },
     })
 
+    // ==================== t=29: Final puddle soak check ====================
     this.timeline.addEvent({
-      id: 'limit-cut-7-8-dash',
-      time: 18.0,
+      id: 'puddle-check-3',
+      time: 29.0,
       handler: () => {
+        const positions = this.getAllPartyPositions()
+        this.aoeManager.checkPuddleSoak('puddle-west', positions)
+        this.aoeManager.checkPuddleSoak('puddle-east', positions)
+        // Failure disabled for now
+
+        // Remove puddles after final check
+        this.aoeManager.remove('puddle-west')
+        this.aoeManager.remove('puddle-east')
+      },
+    })
+
+    // ==================== t=30: CC dash to #8, success ====================
+    this.timeline.addEvent({
+      id: 'cc-dash-8-success',
+      time: 30.0,
+      handler: () => {
+        // CC dashes to #8 (line AoE + boss movement)
+        const ccPos = this.bossManager.getPosition('cruiseChaser')!
+        const player8Pos = this.getEntityPosition(8)!
+        const dashDir = player8Pos.clone().sub(ccPos).normalize()
+        // Extend dash through target and outside arena
+        const dashEndPos = ccPos.clone().add(dashDir.multiplyScalar(ARENA_RADIUS * 2.5))
+        const dashLength = ccPos.distanceTo(dashEndPos)
+        const dashCenter = ccPos.clone().add(dashEndPos).multiplyScalar(0.5)
+        const dashRotation = Math.atan2(dashDir.x, dashDir.z)
+
         this.aoeManager.spawn({
-          id: 'lc-dash-4',
+          id: 'cc-dash-8',
           shape: 'line',
-          position: new THREE.Vector3(0, 0, 8),
-          length: 20,
-          width: 2.5,
-          rotation: Math.PI / 2,
-          telegraphDuration: 1.2,
-          onResolve: () => {
+          position: dashCenter,
+          length: dashLength,
+          width: 2,
+          rotation: dashRotation,
+          telegraphDuration: 0.5,
+        })
+
+        // Start boss dash animation (very fast: 0.25s)
+        this.bossManager.startDash(
+          'cruiseChaser',
+          player8Pos,
+          dashEndPos,
+          0.25,
+          () => {
+            // Hide all bosses
             this.bossManager.hide('cruiseChaser')
-          },
-        })
-      },
-    })
+            this.bossManager.hide('bruteJustice')
+            this.bossManager.hide('alexanderPrime')
 
-    // Alexander Prime spawns
-    this.timeline.addEvent({
-      id: 'alex-spawn',
-      time: 19.5,
-      handler: () => {
-        this.bossManager.show('alexanderPrime', new THREE.Vector3(0, 0, 12))
-        this.bossManager.setRotation('alexanderPrime', 0)
-      },
-    })
-
-    // Sacrament
-    this.timeline.addEvent({
-      id: 'phase-sacrament',
-      time: 20.0,
-      handler: () => {
-        this.setNPCPositions('sacrament')
-      },
-    })
-
-    this.timeline.addEvent({
-      id: 'sacrament-cast',
-      time: 20.5,
-      handler: () => {
-        this.aoeManager.spawn({
-          id: 'sacrament-aoe',
-          shape: 'tshape',
-          position: new THREE.Vector3(0, 0, 12),
-          stemLength: 24,
-          stemWidth: 4,
-          barLength: 20,
-          barWidth: 4,
-          rotation: 0,
-          telegraphDuration: 2.5,
-          onResolve: () => {
-          },
-        })
-      },
-    })
-
-    // Final stack
-    this.timeline.addEvent({
-      id: 'phase-stack',
-      time: 23.5,
-      handler: () => {
-        this.setNPCPositions('stack')
-        this.bossManager.hide('bruteJustice')
-        this.bossManager.hide('alexanderPrime')
+            // Move to final positions
+            this.setNPCPositions('final')
+          }
+        )
       },
     })
 
@@ -920,19 +1003,12 @@ export class Game {
     this.numberSpriteManager.update()
 
     // Update AoEs and check for hits
-    const hits = this.aoeManager.update(deltaTime, this.playerMesh.position)
-    if (hits.length > 0 && this.gameState === 'playing') {
-      this.triggerFailure()
-    }
+    this.aoeManager.update(deltaTime, this.playerMesh.position)
+    // Damage doesn't end encounter for now
 
     // Update chakrams and check for hits
-    const chakramHits = this.chakramManager.update(
-      deltaTime,
-      this.playerMesh.position
-    )
-    if (chakramHits.length > 0 && this.gameState === 'playing') {
-      this.triggerFailure()
-    }
+    this.chakramManager.update(deltaTime, this.playerMesh.position)
+    // Damage doesn't end encounter for now
 
     // Check for success: timeline complete and no active AoEs, with a small delay
     if (this.gameState === 'playing' && this.timeline.isComplete()) {

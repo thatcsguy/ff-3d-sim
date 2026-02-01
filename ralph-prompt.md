@@ -22,7 +22,7 @@ TL;DR - build a tiny, end-to-end slice of the feature first, then expand it out.
 3. Polish and quick wins
 4. Refactors
 
-If all tasks are complete, output <promise>COMPLETE</promise>.
+If ALL tasks across ALL issues are complete, output <promise>COMPLETE</promise>.
 
 # EXPLORATION
 
