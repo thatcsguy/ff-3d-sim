@@ -12,8 +12,9 @@ import { AoEManager } from './AoEManager'
 import { BossManager } from './BossManager'
 import { NumberSpriteManager } from './NumberSpriteManager'
 import { ResultOverlay } from './ResultOverlay'
+import { StartPrompt } from './StartPrompt'
 
-type GameState = 'playing' | 'failed' | 'clear'
+type GameState = 'waiting' | 'playing' | 'failed' | 'clear'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -34,7 +35,8 @@ export class Game {
   private bossManager: BossManager
   private numberSpriteManager: NumberSpriteManager
   private resultOverlay: ResultOverlay
-  private gameState: GameState = 'playing'
+  private startPrompt: StartPrompt
+  private gameState: GameState = 'waiting'
   // Time to wait after all AoEs resolve before declaring success (seconds)
   private readonly successDelayAfterLastAoE: number = 0.5
   private successCheckTime: number | null = null
@@ -132,7 +134,13 @@ export class Game {
     // Result overlay setup
     this.resultOverlay = new ResultOverlay()
 
+    // Start prompt setup
+    this.startPrompt = new StartPrompt()
+
     this.setupTestTimeline()
+
+    // Show start prompt (don't start timeline yet)
+    this.startPrompt.show()
 
     // Listen for restart key
     window.addEventListener('keydown', this.onKeyDown)
@@ -291,8 +299,7 @@ export class Game {
       },
     })
 
-    // Start the timeline automatically for testing
-    this.timeline.start()
+    // Timeline is started when player presses Space
   }
 
   private onResize = (): void => {
@@ -302,6 +309,12 @@ export class Game {
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
+    // Start mechanic on Space key when in waiting state
+    if (event.key === ' ') {
+      if (this.gameState === 'waiting') {
+        this.startMechanic()
+      }
+    }
     // Restart on R key when in failed or clear state
     if (event.key === 'r' || event.key === 'R') {
       if (this.gameState === 'failed' || this.gameState === 'clear') {
@@ -311,14 +324,23 @@ export class Game {
   }
 
   /**
+   * Start the mechanic after player presses the start key.
+   */
+  private startMechanic(): void {
+    this.startPrompt.hide()
+    this.gameState = 'playing'
+    this.timeline.start()
+  }
+
+  /**
    * Restart the mechanic from the beginning.
    */
   private restart(): void {
     // Hide result overlay
     this.resultOverlay.hide()
 
-    // Reset game state
-    this.gameState = 'playing'
+    // Reset game state to waiting
+    this.gameState = 'waiting'
     this.successCheckTime = null
 
     // Reset player position to center
@@ -342,8 +364,11 @@ export class Game {
     this.numberSpriteManager = new NumberSpriteManager()
     this.numberSpriteManager.init(this.scene)
 
-    // Re-setup and start timeline
+    // Re-setup timeline (don't start yet)
     this.setupTestTimeline()
+
+    // Show start prompt
+    this.startPrompt.show()
   }
 
   /**
@@ -459,6 +484,7 @@ export class Game {
     this.bossManager.dispose()
     this.numberSpriteManager.dispose()
     this.resultOverlay.dispose()
+    this.startPrompt.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
     this.arena.dispose()
