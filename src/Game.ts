@@ -134,6 +134,16 @@ export class Game {
     this.npcManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
+    this.arena.dispose()
+
+    // Dispose player mesh resources
+    this.playerMesh.geometry.dispose()
+    if (this.playerMesh.material instanceof THREE.Material) {
+      this.playerMesh.material.dispose()
+    }
+
+    // Dispose renderer
+    this.renderer.dispose()
   }
 
   getInputManager(): InputManager {

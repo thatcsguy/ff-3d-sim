@@ -42,4 +42,13 @@ export class Arena {
   getMesh(): THREE.Mesh | null {
     return this.mesh
   }
+
+  dispose(): void {
+    if (this.mesh) {
+      this.mesh.geometry.dispose()
+      if (this.mesh.material instanceof THREE.Material) {
+        this.mesh.material.dispose()
+      }
+    }
+  }
 }
