@@ -5,6 +5,7 @@ import { CameraController } from './CameraController'
 import { PlayerController } from './PlayerController'
 import { Arena } from './Arena'
 import { NPCManager } from './NPCManager'
+import { HUD } from './HUD'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -18,6 +19,7 @@ export class Game {
   private playerController: PlayerController
   private arena: Arena
   private npcManager: NPCManager
+  private hud: HUD
 
   constructor() {
     // Renderer setup
@@ -73,6 +75,9 @@ export class Game {
     this.npcManager = new NPCManager(this.arena)
     this.npcManager.spawn(this.scene)
 
+    // HUD setup
+    this.hud = new HUD()
+
     // Handle window resize
     window.addEventListener('resize', this.onResize)
   }
@@ -109,6 +114,9 @@ export class Game {
     const playerPosition = this.playerMesh.position.clone()
     playerPosition.y = PLAYER_HEIGHT // Look at player's head height
     this.cameraController.update(deltaTime, playerPosition)
+
+    // Update HUD
+    this.hud.update(this.playerMesh.position)
   }
 
   start(): void {
@@ -122,6 +130,7 @@ export class Game {
       this.animationFrameId = null
     }
     window.removeEventListener('resize', this.onResize)
+    this.hud.dispose()
     this.npcManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
@@ -145,5 +154,9 @@ export class Game {
 
   getNPCManager(): NPCManager {
     return this.npcManager
+  }
+
+  getHUD(): HUD {
+    return this.hud
   }
 }
