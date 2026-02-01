@@ -85,6 +85,7 @@ export class Game {
     this.settingsMenu.setOnSettingsChange(() => {
       this.applySettings()
     })
+    this.applySettings()
 
     // Handle window resize
     window.addEventListener('resize', this.onResize)

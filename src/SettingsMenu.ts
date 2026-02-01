@@ -1,3 +1,9 @@
+const STORAGE_KEY = 'ff-3d-sim-settings'
+
+interface Settings {
+  characterScreenPosition: number
+}
+
 export class SettingsMenu {
   private element: HTMLDivElement
   private isVisible: boolean = false
@@ -5,6 +11,7 @@ export class SettingsMenu {
   private onSettingsChange: (() => void) | null = null
 
   constructor() {
+    this.loadSettings()
     this.element = document.createElement('div')
     this.element.id = 'settings-menu'
     this.element.style.position = 'fixed'
@@ -39,7 +46,29 @@ export class SettingsMenu {
     window.addEventListener('keydown', this.onKeyDown)
 
     const slider = this.element.querySelector('#character-position-slider') as HTMLInputElement
+    slider.value = this.characterScreenPosition.toString()
     slider.addEventListener('input', this.onSliderChange)
+  }
+
+  private loadSettings(): void {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const settings: Settings = JSON.parse(stored)
+        if (typeof settings.characterScreenPosition === 'number') {
+          this.characterScreenPosition = settings.characterScreenPosition
+        }
+      }
+    } catch {
+      // Ignore parse errors, use defaults
+    }
+  }
+
+  private saveSettings(): void {
+    const settings: Settings = {
+      characterScreenPosition: this.characterScreenPosition
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -51,6 +80,7 @@ export class SettingsMenu {
   private onSliderChange = (event: Event): void => {
     const slider = event.target as HTMLInputElement
     this.characterScreenPosition = parseFloat(slider.value)
+    this.saveSettings()
     if (this.onSettingsChange) {
       this.onSettingsChange()
     }
