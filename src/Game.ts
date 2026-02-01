@@ -4,6 +4,7 @@ import { InputManager } from './InputManager'
 import { CameraController } from './CameraController'
 import { PlayerController } from './PlayerController'
 import { Arena } from './Arena'
+import { NPCManager } from './NPCManager'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -16,6 +17,7 @@ export class Game {
   private cameraController: CameraController
   private playerController: PlayerController
   private arena: Arena
+  private npcManager: NPCManager
 
   constructor() {
     // Renderer setup
@@ -67,6 +69,10 @@ export class Game {
     // Player controller setup (must be after playerMesh is created)
     this.playerController = new PlayerController(this.playerMesh, this.inputManager)
 
+    // NPC manager setup
+    this.npcManager = new NPCManager(this.arena)
+    this.npcManager.spawn(this.scene)
+
     // Handle window resize
     window.addEventListener('resize', this.onResize)
   }
@@ -96,6 +102,9 @@ export class Game {
     // Clamp player to arena boundary
     this.arena.clampToArena(this.playerMesh.position)
 
+    // Update NPCs
+    this.npcManager.update(deltaTime)
+
     // Update camera to orbit around player
     const playerPosition = this.playerMesh.position.clone()
     playerPosition.y = PLAYER_HEIGHT // Look at player's head height
@@ -113,6 +122,7 @@ export class Game {
       this.animationFrameId = null
     }
     window.removeEventListener('resize', this.onResize)
+    this.npcManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
   }
@@ -131,5 +141,9 @@ export class Game {
 
   getArena(): Arena {
     return this.arena
+  }
+
+  getNPCManager(): NPCManager {
+    return this.npcManager
   }
 }
