@@ -62,6 +62,7 @@ export class NPCManager {
       })
       const mesh = new THREE.Mesh(geometry, material)
       mesh.position.copy(homePosition)
+      mesh.castShadow = true
       scene.add(mesh)
 
       const npc: NPC = {

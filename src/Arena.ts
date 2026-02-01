@@ -18,6 +18,7 @@ export class Arena {
     this.mesh = new THREE.Mesh(geometry, material)
     this.mesh.rotation.x = -Math.PI / 2
     this.mesh.position.y = 0
+    this.mesh.receiveShadow = true
     scene.add(this.mesh)
   }
 

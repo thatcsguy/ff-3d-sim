@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { PLAYER_HEIGHT, PLAYER_RADIUS } from './constants'
+import { PLAYER_HEIGHT, PLAYER_RADIUS, ARENA_RADIUS } from './constants'
 import { InputManager } from './InputManager'
 import { CameraController } from './CameraController'
 import { PlayerController } from './PlayerController'
@@ -28,6 +28,8 @@ export class Game {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setSize(window.innerWidth, window.innerHeight)
     this.renderer.setPixelRatio(window.devicePixelRatio)
+    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     document.body.appendChild(this.renderer.domElement)
 
     // Scene setup
@@ -51,7 +53,18 @@ export class Game {
     this.scene.add(ambientLight)
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-    directionalLight.position.set(10, 20, 10)
+    // Light from the north (negative Z), high in the sky
+    directionalLight.position.set(0, 50, -30)
+    directionalLight.castShadow = true
+    // Shadow camera covers the arena
+    directionalLight.shadow.mapSize.width = 2048
+    directionalLight.shadow.mapSize.height = 2048
+    directionalLight.shadow.camera.near = 10
+    directionalLight.shadow.camera.far = 100
+    directionalLight.shadow.camera.left = -ARENA_RADIUS - 5
+    directionalLight.shadow.camera.right = ARENA_RADIUS + 5
+    directionalLight.shadow.camera.top = ARENA_RADIUS + 5
+    directionalLight.shadow.camera.bottom = -ARENA_RADIUS - 5
     this.scene.add(directionalLight)
 
     // Arena floor (circular platform)
@@ -68,6 +81,7 @@ export class Game {
     const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x0984e3 })
     this.playerMesh = new THREE.Mesh(playerGeometry, playerMaterial)
     this.playerMesh.position.set(0, PLAYER_HEIGHT / 2, 0)
+    this.playerMesh.castShadow = true
     this.scene.add(this.playerMesh)
 
     // Player controller setup (must be after playerMesh is created)
