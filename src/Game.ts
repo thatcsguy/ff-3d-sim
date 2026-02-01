@@ -102,7 +102,7 @@ export class Game {
     // Map 0-1 slider to vertical offset: 0.5 = no offset
     // Range: -5 to +5 meters offset
     const screenPosition = this.settingsMenu.getCharacterScreenPosition()
-    const offset = (screenPosition - 0.5) * 10
+    const offset = (0.5 - screenPosition) * 10
     this.cameraController.setTargetVerticalOffset(offset)
   }
 

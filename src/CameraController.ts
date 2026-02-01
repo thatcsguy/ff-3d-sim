@@ -75,19 +75,15 @@ export class CameraController {
       }
     }
 
-    // Apply vertical offset for character screen position setting
-    const adjustedTarget = targetPosition.clone()
-    adjustedTarget.y += this.targetVerticalOffset
-
     // Calculate camera position in spherical coordinates around target
     // Apply floor collision: reduce effective zoom if camera would go below floor
     let effectiveZoom = this.zoom
     const offsetY = effectiveZoom * Math.sin(this.pitch)
-    const cameraY = adjustedTarget.y + offsetY
+    const cameraY = targetPosition.y + offsetY
 
     if (cameraY < CAMERA_FLOOR_HEIGHT && this.pitch < 0) {
       // Camera would be below floor - calculate max zoom that keeps it above
-      const maxZoomForFloor = (adjustedTarget.y - CAMERA_FLOOR_HEIGHT) / Math.abs(Math.sin(this.pitch))
+      const maxZoomForFloor = (targetPosition.y - CAMERA_FLOOR_HEIGHT) / Math.abs(Math.sin(this.pitch))
       effectiveZoom = Math.max(CAMERA_MIN_ZOOM, Math.min(effectiveZoom, maxZoomForFloor))
     }
 
@@ -96,11 +92,25 @@ export class CameraController {
     const finalOffsetZ = effectiveZoom * Math.cos(this.yaw) * Math.cos(this.pitch)
 
     this.camera.position.set(
-      adjustedTarget.x + finalOffsetX,
-      Math.max(CAMERA_FLOOR_HEIGHT, adjustedTarget.y + finalOffsetY),
-      adjustedTarget.z + finalOffsetZ
+      targetPosition.x + finalOffsetX,
+      Math.max(CAMERA_FLOOR_HEIGHT, targetPosition.y + finalOffsetY),
+      targetPosition.z + finalOffsetZ
     )
-    this.camera.lookAt(adjustedTarget)
+
+    // Apply screen-space offset for character screen position setting
+    // Calculate screen-up direction (perpendicular to view, aligned with vertical screen axis)
+    const viewDir = new THREE.Vector3(
+      -Math.sin(this.yaw) * Math.cos(this.pitch),
+      -Math.sin(this.pitch),
+      -Math.cos(this.yaw) * Math.cos(this.pitch)
+    ).normalize()
+    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw))
+    const screenUp = new THREE.Vector3().crossVectors(right, viewDir).normalize()
+
+    // Offset lookAt point in screen-up direction
+    // Positive offset = look above player = player appears lower on screen
+    const lookAtPoint = targetPosition.clone().addScaledVector(screenUp, this.targetVerticalOffset)
+    this.camera.lookAt(lookAtPoint)
   }
 
   getForwardDirection(): THREE.Vector3 {
