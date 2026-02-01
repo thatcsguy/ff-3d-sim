@@ -7,6 +7,8 @@ import { Arena } from './Arena'
 import { NPCManager } from './NPCManager'
 import { HUD } from './HUD'
 import { SettingsMenu } from './SettingsMenu'
+import { Timeline } from './Timeline'
+import { AoEManager } from './AoEManager'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -22,6 +24,8 @@ export class Game {
   private npcManager: NPCManager
   private hud: HUD
   private settingsMenu: SettingsMenu
+  private timeline: Timeline
+  private aoeManager: AoEManager
 
   constructor() {
     // Renderer setup
@@ -101,8 +105,39 @@ export class Game {
     })
     this.applySettings()
 
+    // Timeline and AoE manager setup
+    this.timeline = new Timeline()
+    this.aoeManager = new AoEManager(this.scene)
+    this.setupTestTimeline()
+
     // Handle window resize
     window.addEventListener('resize', this.onResize)
+  }
+
+  /**
+   * Temporary test timeline with a single circle AoE.
+   * This will be replaced with the full Wormhole mechanic.
+   */
+  private setupTestTimeline(): void {
+    this.timeline.addEvent({
+      id: 'test-aoe-1',
+      time: 2.0, // Spawn after 2 seconds
+      handler: () => {
+        this.aoeManager.spawn({
+          id: 'circle-aoe-1',
+          shape: 'circle',
+          position: new THREE.Vector3(0, 0, 0), // Center of arena
+          radius: 5,
+          telegraphDuration: 2.0, // 2 seconds to get out
+          onResolve: () => {
+            console.log('AoE resolved!')
+          },
+        })
+      },
+    })
+
+    // Start the timeline automatically for testing
+    this.timeline.start()
   }
 
   private onResize = (): void => {
@@ -140,6 +175,16 @@ export class Game {
     // Update NPCs
     this.npcManager.update(deltaTime)
 
+    // Update timeline
+    this.timeline.update(deltaTime)
+
+    // Update AoEs and check for hits
+    const hits = this.aoeManager.update(deltaTime, this.playerMesh.position)
+    if (hits.length > 0) {
+      console.log('Player hit by AoEs:', hits)
+      // TODO: Trigger failure state
+    }
+
     // Update camera to orbit around player (follow jumping)
     // Target 75% up from player's feet (upper chest/neck area)
     const playerPosition = this.playerMesh.position.clone()
@@ -165,6 +210,7 @@ export class Game {
     this.hud.dispose()
     this.settingsMenu.dispose()
     this.npcManager.dispose()
+    this.aoeManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
     this.arena.dispose()
