@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { PLAYER_HEIGHT, PLAYER_RADIUS, ARENA_RADIUS } from './constants'
+import { InputManager } from './InputManager'
+import { CameraController } from './CameraController'
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -8,6 +10,8 @@ export class Game {
   private playerMesh: THREE.Mesh
   private animationFrameId: number | null = null
   private lastTime: number = 0
+  private inputManager: InputManager
+  private cameraController: CameraController
 
   constructor() {
     // Renderer setup
@@ -20,15 +24,17 @@ export class Game {
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x1a1a2e)
 
-    // Camera setup - positioned to see the arena
+    // Camera setup
     this.camera = new THREE.PerspectiveCamera(
       60,
       window.innerWidth / window.innerHeight,
       0.1,
       1000
     )
-    this.camera.position.set(0, 20, 25)
-    this.camera.lookAt(0, 0, 0)
+
+    // Input and camera controller setup
+    this.inputManager = new InputManager(this.renderer.domElement)
+    this.cameraController = new CameraController(this.camera, this.inputManager)
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
@@ -83,8 +89,11 @@ export class Game {
     this.animationFrameId = requestAnimationFrame(this.gameLoop)
   }
 
-  private update(_deltaTime: number): void {
-    // Game update logic will be added here
+  private update(deltaTime: number): void {
+    // Update camera to orbit around player
+    const playerPosition = this.playerMesh.position.clone()
+    playerPosition.y = PLAYER_HEIGHT // Look at player's head height
+    this.cameraController.update(deltaTime, playerPosition)
   }
 
   start(): void {
@@ -98,5 +107,15 @@ export class Game {
       this.animationFrameId = null
     }
     window.removeEventListener('resize', this.onResize)
+    this.cameraController.dispose()
+    this.inputManager.dispose()
+  }
+
+  getInputManager(): InputManager {
+    return this.inputManager
+  }
+
+  getCameraController(): CameraController {
+    return this.cameraController
   }
 }
