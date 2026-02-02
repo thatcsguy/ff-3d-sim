@@ -76,7 +76,7 @@ export class NumberSpriteManager {
 
   /**
    * Assigns a number to an entity (identified by a unique ID).
-   * The sprite will follow the entity's mesh position.
+   * The sprite will follow the entity's group position (at feet level).
    */
   assignNumber(id: string, mesh: THREE.Object3D, num: number): void {
     if (!this.scene) return
@@ -87,7 +87,8 @@ export class NumberSpriteManager {
     // Create new sprite
     const sprite = this.createSprite(num)
     sprite.position.copy(mesh.position)
-    sprite.position.y = mesh.position.y + PLAYER_HEIGHT / 2 + NUMBER_SPRITE_OFFSET_Y
+    // Entity position is at feet level, so add full PLAYER_HEIGHT plus offset
+    sprite.position.y = mesh.position.y + PLAYER_HEIGHT + NUMBER_SPRITE_OFFSET_Y
     this.scene.add(sprite)
 
     this.entities.set(id, { mesh, sprite, number: num })
@@ -118,14 +119,15 @@ export class NumberSpriteManager {
   }
 
   /**
-   * Updates sprite positions to follow their meshes.
+   * Updates sprite positions to follow their entities.
    * Should be called every frame.
    */
   update(): void {
     for (const entity of this.entities.values()) {
       entity.sprite.position.copy(entity.mesh.position)
+      // Entity position is at feet level, so add full PLAYER_HEIGHT plus offset
       entity.sprite.position.y =
-        entity.mesh.position.y + PLAYER_HEIGHT / 2 + NUMBER_SPRITE_OFFSET_Y
+        entity.mesh.position.y + PLAYER_HEIGHT + NUMBER_SPRITE_OFFSET_Y
     }
   }
 

@@ -6,7 +6,6 @@ import {
   NPC_COUNT,
   NPC_WANDER_RADIUS,
   ARENA_RADIUS,
-  PLAYER_HEIGHT,
 } from './constants'
 
 describe('NPCManager', () => {
@@ -33,12 +32,12 @@ describe('NPCManager', () => {
       expect(npcManager.getNPCCount()).toBe(3)
     })
 
-    it('adds NPC meshes to the scene', () => {
+    it('adds NPC groups to the scene', () => {
       npcManager.spawn(scene)
 
-      const meshes = npcManager.getMeshes()
-      for (const mesh of meshes) {
-        expect(scene.children).toContain(mesh)
+      const groups = npcManager.getGroups()
+      for (const group of groups) {
+        expect(scene.children).toContain(group)
       }
     })
 
@@ -47,30 +46,37 @@ describe('NPCManager', () => {
 
       const npcs = npcManager.getNPCs()
       for (const npc of npcs) {
+        const group = npc.humanoid.group
         const distance = Math.sqrt(
-          npc.mesh.position.x ** 2 + npc.mesh.position.z ** 2
+          group.position.x ** 2 + group.position.z ** 2
         )
         expect(distance).toBeLessThanOrEqual(ARENA_RADIUS)
       }
     })
 
-    it('spawns NPCs at correct height', () => {
+    it('spawns NPCs at ground level', () => {
       npcManager.spawn(scene)
 
       const npcs = npcManager.getNPCs()
       for (const npc of npcs) {
-        expect(npc.mesh.position.y).toBeCloseTo(PLAYER_HEIGHT / 2)
+        expect(npc.humanoid.group.position.y).toBeCloseTo(0)
       }
     })
 
     it('gives each NPC a unique color', () => {
       npcManager.spawn(scene, 7)
 
-      const meshes = npcManager.getMeshes()
-      const colors = meshes.map((mesh) => {
-        const material = mesh.material as THREE.MeshStandardMaterial
-        return material.color.getHex()
-      })
+      const groups = npcManager.getGroups()
+      const colors: number[] = []
+      for (const group of groups) {
+        // Get color from first mesh in group (head)
+        group.traverse((child) => {
+          if (child instanceof THREE.Mesh && colors.length < groups.indexOf(group) + 1) {
+            const material = child.material as THREE.MeshStandardMaterial
+            colors.push(material.color.getHex())
+          }
+        })
+      }
 
       // All 7 should be unique
       const uniqueColors = new Set(colors)
@@ -82,27 +88,29 @@ describe('NPCManager', () => {
     it('moves NPCs toward their target position', () => {
       npcManager.spawn(scene, 1)
       const npc = npcManager.getNPCs()[0]
+      const group = npc.humanoid.group
 
       // Set a specific target far from current position
-      const startX = npc.mesh.position.x
-      npc.targetPosition.set(startX + 5, npc.mesh.position.y, npc.mesh.position.z)
+      const startX = group.position.x
+      npc.targetPosition.set(startX + 5, group.position.y, group.position.z)
 
       // Update should move NPC toward target
       npcManager.update(1) // 1 second
 
       // Should have moved closer to target
-      const movedX = npc.mesh.position.x
+      const movedX = group.position.x
       expect(Math.abs(movedX - (startX + 5))).toBeLessThan(Math.abs(startX - (startX + 5)))
     })
 
     it('keeps NPCs within arena bounds', () => {
       npcManager.spawn(scene, 1)
       const npc = npcManager.getNPCs()[0]
+      const group = npc.humanoid.group
 
       // Set target outside arena
-      npc.homePosition.set(ARENA_RADIUS - 1, PLAYER_HEIGHT / 2, 0)
-      npc.targetPosition.set(ARENA_RADIUS + 10, PLAYER_HEIGHT / 2, 0)
-      npc.mesh.position.copy(npc.homePosition)
+      npc.homePosition.set(ARENA_RADIUS - 1, 0, 0)
+      npc.targetPosition.set(ARENA_RADIUS + 10, 0, 0)
+      group.position.copy(npc.homePosition)
 
       // Multiple updates
       for (let i = 0; i < 100; i++) {
@@ -110,7 +118,7 @@ describe('NPCManager', () => {
       }
 
       const distance = Math.sqrt(
-        npc.mesh.position.x ** 2 + npc.mesh.position.z ** 2
+        group.position.x ** 2 + group.position.z ** 2
       )
       expect(distance).toBeLessThanOrEqual(ARENA_RADIUS + 0.01) // Small tolerance
     })
@@ -136,27 +144,28 @@ describe('NPCManager', () => {
     it('NPCs stop moving when at target', () => {
       npcManager.spawn(scene, 1)
       const npc = npcManager.getNPCs()[0]
+      const group = npc.humanoid.group
 
       // Put NPC at its target
-      npc.targetPosition.copy(npc.mesh.position)
+      npc.targetPosition.copy(group.position)
       npc.wanderTimer = 100 // Prevent picking new target
 
-      const startPos = npc.mesh.position.clone()
+      const startPos = group.position.clone()
       npcManager.update(1)
 
-      expect(npc.mesh.position.x).toBeCloseTo(startPos.x, 2)
-      expect(npc.mesh.position.z).toBeCloseTo(startPos.z, 2)
+      expect(group.position.x).toBeCloseTo(startPos.x, 2)
+      expect(group.position.z).toBeCloseTo(startPos.z, 2)
     })
   })
 
   describe('dispose', () => {
-    it('removes all NPC meshes from scene', () => {
+    it('removes all NPC groups from scene', () => {
       npcManager.spawn(scene)
-      const meshCount = scene.children.length
+      const childCount = scene.children.length
 
       npcManager.dispose()
 
-      expect(scene.children.length).toBe(meshCount - NPC_COUNT)
+      expect(scene.children.length).toBe(childCount - NPC_COUNT)
     })
 
     it('clears internal NPC list', () => {
@@ -167,15 +176,15 @@ describe('NPCManager', () => {
     })
   })
 
-  describe('getMeshes', () => {
-    it('returns array of all NPC meshes', () => {
+  describe('getGroups', () => {
+    it('returns array of all NPC groups', () => {
       npcManager.spawn(scene, 5)
 
-      const meshes = npcManager.getMeshes()
+      const groups = npcManager.getGroups()
 
-      expect(meshes).toHaveLength(5)
-      for (const mesh of meshes) {
-        expect(mesh).toBeInstanceOf(THREE.Mesh)
+      expect(groups).toHaveLength(5)
+      for (const group of groups) {
+        expect(group).toBeInstanceOf(THREE.Group)
       }
     })
   })

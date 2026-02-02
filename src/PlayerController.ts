@@ -1,23 +1,27 @@
 import * as THREE from 'three'
 import { InputManager, MouseButton } from './InputManager'
 import { CameraController } from './CameraController'
-import { PLAYER_SPEED, PLAYER_HEIGHT } from './constants'
+import { PLAYER_SPEED } from './constants'
 import { BuffManager } from './BuffManager'
+import { HumanoidMesh } from './HumanoidMesh'
 
 const JUMP_VELOCITY = 8 // meters per second initial upward velocity
 const GRAVITY = 20 // meters per second squared
 const SPRINT_SPEED_MULTIPLIER = 1.3 // +30% movement speed
 
 export class PlayerController {
-  private mesh: THREE.Mesh
+  private group: THREE.Group
+  private humanoid: HumanoidMesh
   private inputManager: InputManager
   private buffManager: BuffManager | null
   private velocity: THREE.Vector3 = new THREE.Vector3()
   private isJumping: boolean = false
   private jumpHorizontalVelocity: THREE.Vector3 = new THREE.Vector3()
+  private lastMoveDirection: THREE.Vector3 = new THREE.Vector3()
 
-  constructor(mesh: THREE.Mesh, inputManager: InputManager, buffManager?: BuffManager) {
-    this.mesh = mesh
+  constructor(humanoid: HumanoidMesh, inputManager: InputManager, buffManager?: BuffManager) {
+    this.humanoid = humanoid
+    this.group = humanoid.group
     this.inputManager = inputManager
     this.buffManager = buffManager ?? null
   }
@@ -63,6 +67,7 @@ export class PlayerController {
     const inputHorizontalVelocity = new THREE.Vector3()
     if (moveDirection.lengthSq() > 0) {
       moveDirection.normalize()
+      this.lastMoveDirection.copy(moveDirection)
       // Apply Sprint speed modifier if buff is active
       const hasSprint = this.buffManager?.has('player', 'sprint') ?? false
       const speedMultiplier = hasSprint ? SPRINT_SPEED_MULTIPLIER : 1.0
@@ -86,36 +91,44 @@ export class PlayerController {
     // Apply horizontal movement
     if (this.isJumping) {
       // Use snapshotted velocity while in air
-      this.mesh.position.x += this.jumpHorizontalVelocity.x * deltaTime
-      this.mesh.position.z += this.jumpHorizontalVelocity.z * deltaTime
+      this.group.position.x += this.jumpHorizontalVelocity.x * deltaTime
+      this.group.position.z += this.jumpHorizontalVelocity.z * deltaTime
     } else {
       // Use input velocity while on ground
-      this.mesh.position.x += inputHorizontalVelocity.x * deltaTime
-      this.mesh.position.z += inputHorizontalVelocity.z * deltaTime
+      this.group.position.x += inputHorizontalVelocity.x * deltaTime
+      this.group.position.z += inputHorizontalVelocity.z * deltaTime
     }
 
     if (this.isJumping) {
       // Apply gravity
       this.velocity.y -= GRAVITY * deltaTime
-      this.mesh.position.y += this.velocity.y * deltaTime
+      this.group.position.y += this.velocity.y * deltaTime
 
       // Check for landing
-      const groundY = PLAYER_HEIGHT / 2
-      if (this.mesh.position.y <= groundY) {
-        this.mesh.position.y = groundY
+      const groundY = 0
+      if (this.group.position.y <= groundY) {
+        this.group.position.y = groundY
         this.velocity.y = 0
         this.isJumping = false
         this.jumpHorizontalVelocity.set(0, 0, 0)
       }
     }
+
+    // Update humanoid animation (pass movement direction for walk animation and facing)
+    const animationDirection = moveDirection.lengthSq() > 0.01 ? moveDirection : undefined
+    this.humanoid.update(deltaTime, animationDirection)
   }
 
   getPosition(): THREE.Vector3 {
-    return this.mesh.position.clone()
+    return this.group.position.clone()
   }
 
-  getMesh(): THREE.Mesh {
-    return this.mesh
+  getGroup(): THREE.Group {
+    return this.group
+  }
+
+  getHumanoid(): HumanoidMesh {
+    return this.humanoid
   }
 
   isInAir(): boolean {

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { PLAYER_HEIGHT, PLAYER_RADIUS, ARENA_RADIUS } from './constants'
+import { PLAYER_HEIGHT, ARENA_RADIUS } from './constants'
 import { InputManager } from './InputManager'
 import { CameraController } from './CameraController'
 import { PlayerController } from './PlayerController'
@@ -18,6 +18,7 @@ import { BuffManager, StatusEffectConfig } from './BuffManager'
 import { AbilitySystem } from './AbilitySystem'
 import { Hotbar } from './Hotbar'
 import { BuffDisplay } from './BuffDisplay'
+import { HumanoidMesh } from './HumanoidMesh'
 
 type GameState = 'waiting' | 'playing' | 'failed' | 'clear'
 
@@ -52,7 +53,8 @@ export class Game {
   private renderer: THREE.WebGLRenderer
   private scene: THREE.Scene
   private camera: THREE.PerspectiveCamera
-  private playerMesh: THREE.Mesh
+  private playerHumanoid: HumanoidMesh
+  private playerGroup: THREE.Group
   private animationFrameId: number | null = null
   private lastTime: number = 0
   private inputManager: InputManager
@@ -128,18 +130,11 @@ export class Game {
     this.arena = new Arena()
     this.arena.create(this.scene)
 
-    // Player cylinder (blue)
-    const playerGeometry = new THREE.CylinderGeometry(
-      PLAYER_RADIUS,
-      PLAYER_RADIUS,
-      PLAYER_HEIGHT,
-      16
-    )
-    const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x0984e3 })
-    this.playerMesh = new THREE.Mesh(playerGeometry, playerMaterial)
-    this.playerMesh.position.set(0, PLAYER_HEIGHT / 2, 0)
-    this.playerMesh.castShadow = true
-    this.scene.add(this.playerMesh)
+    // Player humanoid (blue)
+    this.playerHumanoid = new HumanoidMesh(0x0984e3)
+    this.playerGroup = this.playerHumanoid.group
+    this.playerGroup.position.set(0, 0, 0)
+    this.scene.add(this.playerGroup)
 
     // Buff and ability system setup
     this.buffManager = new BuffManager()
@@ -147,8 +142,8 @@ export class Game {
     this.hotbar = new Hotbar(this.abilitySystem)
     this.buffDisplay = new BuffDisplay(this.buffManager, 'player')
 
-    // Player controller setup (must be after playerMesh is created)
-    this.playerController = new PlayerController(this.playerMesh, this.inputManager, this.buffManager)
+    // Player controller setup (must be after player humanoid is created)
+    this.playerController = new PlayerController(this.playerHumanoid, this.inputManager, this.buffManager)
 
     // NPC manager setup
     this.npcManager = new NPCManager(this.arena)
@@ -205,7 +200,7 @@ export class Game {
    */
   private getBraindeadPositions(phase: string): Map<number, THREE.Vector3> {
     const positions = new Map<number, THREE.Vector3>()
-    const y = PLAYER_HEIGHT / 2
+    const y = 0 // Position at feet level
 
     // Arena radius is ~18m, puddles at ESE/WNW (22.5° from E/W)
     const puddleDist = ARENA_RADIUS - 0.2 * ARENA_RADIUS // Distance to puddle center
@@ -371,7 +366,7 @@ export class Game {
       if (num === partyNum) {
         this.npcManager.setScriptedPosition(
           npcIndex,
-          new THREE.Vector3(finalX, PLAYER_HEIGHT / 2, finalZ)
+          new THREE.Vector3(finalX, 0, finalZ)
         )
         return
       }
@@ -380,20 +375,20 @@ export class Game {
   }
 
   /**
-   * Get the mesh for a party member by their assigned number (1-8).
-   * Returns player mesh if partyNum matches playerNumber, otherwise returns NPC mesh.
+   * Get the group for a party member by their assigned number (1-8).
+   * Returns player group if partyNum matches playerNumber, otherwise returns NPC group.
    */
-  private getEntityByNumber(partyNum: number): THREE.Mesh | null {
+  private getEntityByNumber(partyNum: number): THREE.Object3D | null {
     if (partyNum === this.playerNumber) {
-      return this.playerMesh
+      return this.playerGroup
     }
     // NPCs fill slots not taken by player
     let npcIndex = 0
     for (let num = 1; num <= 8; num++) {
       if (num === this.playerNumber) continue
       if (num === partyNum) {
-        const meshes = this.npcManager.getMeshes()
-        return npcIndex < meshes.length ? meshes[npcIndex] : null
+        const groups = this.npcManager.getGroups()
+        return npcIndex < groups.length ? groups[npcIndex] : null
       }
       npcIndex++
     }
@@ -404,8 +399,8 @@ export class Game {
    * Get the position of a party member by their assigned number (1-8).
    */
   private getEntityPosition(partyNum: number): THREE.Vector3 | null {
-    const mesh = this.getEntityByNumber(partyNum)
-    return mesh ? mesh.position.clone() : null
+    const entity = this.getEntityByNumber(partyNum)
+    return entity ? entity.position.clone() : null
   }
 
   /**
@@ -464,7 +459,7 @@ export class Game {
     // Add player first (for visual feedback in puddles etc)
     entities.push({
       id: this.getEntityId(this.playerNumber),
-      position: this.playerMesh.position.clone(),
+      position: this.playerGroup.position.clone(),
     })
     // Add NPCs
     for (let partyNum = 1; partyNum <= 8; partyNum++) {
@@ -482,8 +477,8 @@ export class Game {
 
   /**
    * Spawn Cruise Chaser cone attack on an odd-numbered player.
-   * - If target is NPC: CC spawns slightly toward arena center, cone fires outward
-   * - If target is player: CC spawns behind player (opposite facing), cone fires in facing direction
+   * - If target is NPC: CC spawns between NPC and arena center, cone fires outward
+   * - If target is player: CC spawns behind player (opposite mesh facing), cone fires in facing direction
    */
   private spawnCruiseChaserCone(targetPlayerNum: number, coneId: string): void {
     const targetPos = this.getEntityPosition(targetPlayerNum)!
@@ -493,12 +488,17 @@ export class Game {
     let coneRotation: number
 
     if (targetPlayerNum === this.playerNumber) {
-      // Target is the human player - use camera facing direction
-      const forwardDir = this.cameraController.getForwardDirection()
+      // Target is the human player - use mesh facing direction
+      const playerRotation = this.playerHumanoid.getRotation()
+      const forwardDir = new THREE.Vector3(
+        Math.sin(playerRotation),
+        0,
+        Math.cos(playerRotation)
+      )
       // CC spawns behind player (opposite of facing)
       ccPosition = targetPos.clone().sub(forwardDir.clone().multiplyScalar(CC_OFFSET))
       // Cone fires in the direction the player is facing
-      coneRotation = Math.atan2(forwardDir.x, forwardDir.z)
+      coneRotation = playerRotation
     } else {
       // Target is an NPC - use arena-relative positioning
       const toCenter = targetPos.clone().negate().normalize()
@@ -631,11 +631,11 @@ export class Game {
         // Assign player their random number
         this.numberSpriteManager.assignNumber(
           'player',
-          this.playerMesh,
+          this.playerGroup,
           this.playerNumber
         )
         // Assign NPCs the remaining numbers
-        const npcs = this.npcManager.getMeshes()
+        const npcs = this.npcManager.getGroups()
         let npcIndex = 0
         for (let partyNum = 1; partyNum <= 8; partyNum++) {
           if (partyNum === this.playerNumber) continue
@@ -1158,7 +1158,7 @@ export class Game {
     this.successCheckTime = null
 
     // Reset player position to center
-    this.playerMesh.position.set(0, PLAYER_HEIGHT / 2, 0)
+    this.playerGroup.position.set(0, 0, 0)
 
     // Reset timeline
     this.timeline.reset()
@@ -1403,7 +1403,7 @@ export class Game {
     this.playerController.update(deltaTime, this.cameraController)
 
     // Clamp player to arena boundary
-    this.arena.clampToArena(this.playerMesh.position)
+    this.arena.clampToArena(this.playerGroup.position)
 
     // Update NPCs
     this.npcManager.update(deltaTime)
@@ -1446,13 +1446,13 @@ export class Game {
 
     // Update camera to orbit around player (follow jumping)
     // Target 75% up from player's feet (upper chest/neck area)
-    const playerPosition = this.playerMesh.position.clone()
-    const playerBottom = this.playerMesh.position.y - PLAYER_HEIGHT / 2
-    playerPosition.y = playerBottom + PLAYER_HEIGHT * 0.75
+    // playerGroup.position.y is at feet level
+    const playerPosition = this.playerGroup.position.clone()
+    playerPosition.y = this.playerGroup.position.y + PLAYER_HEIGHT * 0.75
     this.cameraController.update(deltaTime, playerPosition)
 
     // Update HUD
-    this.hud.update(this.playerMesh.position)
+    this.hud.update(this.playerGroup.position)
 
     // Update hotbar and buff display
     this.hotbar.update()
@@ -1488,11 +1488,8 @@ export class Game {
     this.inputManager.dispose()
     this.arena.dispose()
 
-    // Dispose player mesh resources
-    this.playerMesh.geometry.dispose()
-    if (this.playerMesh.material instanceof THREE.Material) {
-      this.playerMesh.material.dispose()
-    }
+    // Dispose player humanoid resources
+    this.playerHumanoid.dispose()
 
     // Dispose renderer
     this.renderer.dispose()

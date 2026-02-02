@@ -3,11 +3,10 @@ import { Arena } from './Arena'
 import {
   NPC_COUNT,
   NPC_WANDER_RADIUS,
-  PLAYER_HEIGHT,
-  PLAYER_RADIUS,
   ARENA_RADIUS,
   PLAYER_SPEED,
 } from './constants'
+import { HumanoidMesh } from './HumanoidMesh'
 
 const NPC_SPEED = PLAYER_SPEED // Same speed as player
 const NPC_COLORS = [
@@ -21,10 +20,11 @@ const NPC_COLORS = [
 ]
 
 interface NPC {
-  mesh: THREE.Mesh
+  humanoid: HumanoidMesh
   homePosition: THREE.Vector3
   targetPosition: THREE.Vector3
   wanderTimer: number
+  lastMoveDirection: THREE.Vector3
 }
 
 export class NPCManager {
@@ -49,30 +49,21 @@ export class NPCManager {
 
       const homePosition = new THREE.Vector3(
         Math.cos(angle) * distance,
-        PLAYER_HEIGHT / 2,
+        0,
         Math.sin(angle) * distance
       )
 
-      // Create NPC mesh
-      const geometry = new THREE.CylinderGeometry(
-        PLAYER_RADIUS,
-        PLAYER_RADIUS,
-        PLAYER_HEIGHT,
-        16
-      )
-      const material = new THREE.MeshStandardMaterial({
-        color: NPC_COLORS[i % NPC_COLORS.length],
-      })
-      const mesh = new THREE.Mesh(geometry, material)
-      mesh.position.copy(homePosition)
-      mesh.castShadow = true
-      scene.add(mesh)
+      // Create NPC humanoid mesh
+      const humanoid = new HumanoidMesh(NPC_COLORS[i % NPC_COLORS.length])
+      humanoid.group.position.copy(homePosition)
+      scene.add(humanoid.group)
 
       const npc: NPC = {
-        mesh,
+        humanoid,
         homePosition: homePosition.clone(),
         targetPosition: homePosition.clone(),
         wanderTimer: Math.random() * 2, // Stagger initial wander
+        lastMoveDirection: new THREE.Vector3(),
       }
 
       this.npcs.push(npc)
@@ -82,12 +73,14 @@ export class NPCManager {
   update(deltaTime: number): void {
     for (let i = 0; i < this.npcs.length; i++) {
       const npc = this.npcs[i]
+      const group = npc.humanoid.group
 
       // In scripted mode, move toward scripted position instead of wandering
       if (this.scriptedMode) {
         const scriptedPos = this.scriptedPositions.get(i)
         if (scriptedPos) {
           npc.targetPosition.copy(scriptedPos)
+          npc.targetPosition.y = 0 // Keep at ground level
         }
       } else {
         // Update wander timer
@@ -103,7 +96,7 @@ export class NPCManager {
 
           npc.targetPosition.set(
             npc.homePosition.x + Math.cos(angle) * distance,
-            npc.homePosition.y,
+            0,
             npc.homePosition.z + Math.sin(angle) * distance
           )
 
@@ -114,20 +107,25 @@ export class NPCManager {
 
       // Move toward target
       const direction = new THREE.Vector3()
-        .subVectors(npc.targetPosition, npc.mesh.position)
+        .subVectors(npc.targetPosition, group.position)
         .setY(0) // Keep movement horizontal
 
       const distanceToTarget = direction.length()
 
       if (distanceToTarget > 0.1) {
         direction.normalize()
+        npc.lastMoveDirection.copy(direction)
         const moveDistance = Math.min(NPC_SPEED * deltaTime, distanceToTarget)
-        npc.mesh.position.x += direction.x * moveDistance
-        npc.mesh.position.z += direction.z * moveDistance
+        group.position.x += direction.x * moveDistance
+        group.position.z += direction.z * moveDistance
       }
 
       // Safety clamp to arena
-      this.arena.clampToArena(npc.mesh.position)
+      this.arena.clampToArena(group.position)
+
+      // Update humanoid animation
+      const animationDirection = distanceToTarget > 0.1 ? npc.lastMoveDirection : undefined
+      npc.humanoid.update(deltaTime, animationDirection)
     }
   }
 
@@ -139,8 +137,8 @@ export class NPCManager {
     return this.npcs.length
   }
 
-  getMeshes(): THREE.Mesh[] {
-    return this.npcs.map((npc) => npc.mesh)
+  getGroups(): THREE.Group[] {
+    return this.npcs.map((npc) => npc.humanoid.group)
   }
 
   /**
@@ -194,8 +192,8 @@ export class NPCManager {
    */
   teleportNPC(npcIndex: number, position: THREE.Vector3): void {
     if (npcIndex >= 0 && npcIndex < this.npcs.length) {
-      this.npcs[npcIndex].mesh.position.copy(position)
-      this.npcs[npcIndex].mesh.position.y = PLAYER_HEIGHT / 2
+      this.npcs[npcIndex].humanoid.group.position.copy(position)
+      this.npcs[npcIndex].humanoid.group.position.y = 0
     }
   }
 
@@ -220,11 +218,8 @@ export class NPCManager {
   dispose(): void {
     if (this.scene) {
       for (const npc of this.npcs) {
-        this.scene.remove(npc.mesh)
-        npc.mesh.geometry.dispose()
-        if (npc.mesh.material instanceof THREE.Material) {
-          npc.mesh.material.dispose()
-        }
+        this.scene.remove(npc.humanoid.group)
+        npc.humanoid.dispose()
       }
     }
     this.npcs = []
