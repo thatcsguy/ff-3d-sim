@@ -14,12 +14,39 @@ import { NumberSpriteManager } from './NumberSpriteManager'
 import { ResultOverlay } from './ResultOverlay'
 import { StartPrompt } from './StartPrompt'
 import { ChakramManager } from './ChakramManager'
-import { BuffManager } from './BuffManager'
+import { BuffManager, StatusEffectConfig } from './BuffManager'
 import { AbilitySystem } from './AbilitySystem'
 import { Hotbar } from './Hotbar'
 import { BuffDisplay } from './BuffDisplay'
 
 type GameState = 'waiting' | 'playing' | 'failed' | 'clear'
+
+/**
+ * Debuff configurations for damage taken
+ */
+const DEBUFFS = {
+  MAGIC_VULN: {
+    id: 'magic-vuln',
+    name: 'Magic Vulnerability Up',
+    type: 'debuff',
+    duration: 10,
+    iconUrl: 'https://xivapi.com/i/015000/015057.png',
+  } as StatusEffectConfig,
+  PHYSICAL_VULN: {
+    id: 'physical-vuln',
+    name: 'Physical Vulnerability Up',
+    type: 'debuff',
+    duration: 17,
+    iconUrl: 'https://xivapi.com/i/015000/015053.png',
+  } as StatusEffectConfig,
+  VULN_UP: {
+    id: 'vuln-up',
+    name: 'Vulnerability Up',
+    type: 'debuff',
+    duration: 3,
+    iconUrl: 'https://xivapi.com/i/015000/015020.png',
+  } as StatusEffectConfig,
+}
 
 export class Game {
   private renderer: THREE.WebGLRenderer
@@ -797,7 +824,8 @@ export class Game {
         const positions = this.getAllPartyPositions()
         this.aoeManager.checkPuddleSoak('puddle-west', positions)
         this.aoeManager.checkPuddleSoak('puddle-east', positions)
-        // Failure disabled for now
+        // Apply debuff if player is inside a puddle
+        this.checkPlayerPuddleDebuff()
       },
     })
 
@@ -871,7 +899,8 @@ export class Game {
         const positions = this.getAllPartyPositions()
         this.aoeManager.checkPuddleSoak('puddle-west', positions)
         this.aoeManager.checkPuddleSoak('puddle-east', positions)
-        // Failure disabled for now
+        // Apply debuff if player is inside a puddle
+        this.checkPlayerPuddleDebuff()
 
         // Players 3 & 4 move to puddle positions
         this.setPartyMemberTarget(3, -17, 0)
@@ -945,7 +974,8 @@ export class Game {
         const positions = this.getAllPartyPositions()
         this.aoeManager.checkPuddleSoak('puddle-west', positions)
         this.aoeManager.checkPuddleSoak('puddle-east', positions)
-        // Failure disabled for now
+        // Apply debuff if player is inside a puddle
+        this.checkPlayerPuddleDebuff()
 
         // Remove puddles after final check
         this.aoeManager.remove('puddle-west')
@@ -1088,6 +1118,51 @@ export class Game {
   }
 
   /**
+   * Apply debuffs when player is hit by AoEs.
+   * Cruise Chaser attacks (cc-cone, cc-dash, bj-cone) apply Magic Vuln + Physical Vuln.
+   * Other boss attacks also apply both vulnerability debuffs.
+   */
+  private applyAoEDebuffs(hitIds: string[]): void {
+    for (const id of hitIds) {
+      // All Cruise Chaser and Brute Justice attacks apply vulnerability debuffs
+      if (
+        id.startsWith('cc-') ||
+        id.startsWith('bj-') ||
+        id === 'ap-plus'
+      ) {
+        this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
+        this.buffManager.apply('player', DEBUFFS.PHYSICAL_VULN)
+      }
+    }
+  }
+
+  /**
+   * Apply debuffs when player is hit by chakrams.
+   * Chakrams apply Magic Vuln + Physical Vuln.
+   */
+  private applyChakramDebuffs(hitIds: string[]): void {
+    for (const _id of hitIds) {
+      this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
+      this.buffManager.apply('player', DEBUFFS.PHYSICAL_VULN)
+    }
+  }
+
+  /**
+   * Check if player is inside a puddle at soak time and apply debuffs.
+   * Applies Magic Vuln (10s) + Vulnerability Up (3s) if player is in puddle.
+   */
+  private checkPlayerPuddleDebuff(): void {
+    const playerPos = [this.playerMesh.position]
+    const inWest = this.aoeManager.checkPuddleSoak('puddle-west', playerPos)
+    const inEast = this.aoeManager.checkPuddleSoak('puddle-east', playerPos)
+
+    if (inWest || inEast) {
+      this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
+      this.buffManager.apply('player', DEBUFFS.VULN_UP)
+    }
+  }
+
+  /**
    * Trigger failure state when player is hit by an AoE.
    * Currently unused - damage doesn't end encounter for now.
    */
@@ -1152,12 +1227,12 @@ export class Game {
     this.numberSpriteManager.update()
 
     // Update AoEs and check for hits
-    this.aoeManager.update(deltaTime, this.playerMesh.position)
-    // Damage doesn't end encounter for now
+    const aoeHits = this.aoeManager.update(deltaTime, this.playerMesh.position)
+    this.applyAoEDebuffs(aoeHits)
 
     // Update chakrams and check for hits
-    this.chakramManager.update(deltaTime, this.playerMesh.position)
-    // Damage doesn't end encounter for now
+    const chakramHits = this.chakramManager.update(deltaTime, this.playerMesh.position)
+    this.applyChakramDebuffs(chakramHits)
 
     // Check for success: timeline complete and no active AoEs, with a small delay
     if (this.gameState === 'playing' && this.timeline.isComplete()) {
