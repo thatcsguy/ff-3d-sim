@@ -166,8 +166,17 @@ export class Game {
     const positions = new Map<number, THREE.Vector3>()
     const y = PLAYER_HEIGHT / 2
 
-    // Arena radius is ~18m, puddles touch wall at E/W
-    const puddleX = ARENA_RADIUS - 0.2 * ARENA_RADIUS // Puddle center (touching wall)
+    // Arena radius is ~18m, puddles at ESE/WNW (22.5° from E/W)
+    const puddleDist = ARENA_RADIUS - 0.2 * ARENA_RADIUS // Distance to puddle center
+    const puddleAngle = (22.5 * Math.PI) / 180
+    const puddleCos = Math.cos(puddleAngle)
+    const puddleSin = Math.sin(puddleAngle)
+    // ESE puddle position components
+    const esePuddleX = puddleDist * puddleCos
+    const esePuddleZ = puddleDist * puddleSin
+    // WNW puddle position components
+    const wnwPuddleX = -puddleDist * puddleCos
+    const wnwPuddleZ = -puddleDist * puddleSin
     const safeX = 8 // Safe spot X for avoiding mechanics
     const safeZ = 8 // Safe spot Z
 
@@ -200,40 +209,40 @@ export class Game {
         positions.set(2, new THREE.Vector3(safeX, y, -safeZ / 2))
         positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
         positions.set(4, new THREE.Vector3(safeX, y, 0))
-        positions.set(5, new THREE.Vector3(-puddleX, y, 0)) // West puddle soak ready
-        positions.set(6, new THREE.Vector3(puddleX, y, 0)) // East puddle soak ready
+        positions.set(5, new THREE.Vector3(wnwPuddleX, y, wnwPuddleZ)) // WNW puddle soak ready
+        positions.set(6, new THREE.Vector3(esePuddleX, y, esePuddleZ)) // ESE puddle soak ready
         positions.set(7, new THREE.Vector3(-safeX, y, safeZ / 2))
         positions.set(8, new THREE.Vector3(safeX, y, safeZ / 2))
         break
 
       case 'puddle-1':
-        // #5/#6 soak E/W puddles (first soak)
+        // #5/#6 soak ESE/WNW puddles (first soak)
         positions.set(1, new THREE.Vector3(0, y, safeZ))
         positions.set(2, new THREE.Vector3(safeX, y, -safeZ / 2))
         positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
         positions.set(4, new THREE.Vector3(safeX, y, 0))
-        positions.set(5, new THREE.Vector3(-puddleX, y, 0)) // Soaking west
-        positions.set(6, new THREE.Vector3(puddleX, y, 0)) // Soaking east
+        positions.set(5, new THREE.Vector3(wnwPuddleX, y, wnwPuddleZ)) // Soaking WNW
+        positions.set(6, new THREE.Vector3(esePuddleX, y, esePuddleZ)) // Soaking ESE
         positions.set(7, new THREE.Vector3(-safeX, y, safeZ / 2))
         positions.set(8, new THREE.Vector3(safeX, y, safeZ / 2))
         break
 
       case 'puddle-2':
-        // #7/#8 soak E/W puddles (second soak - half radius)
+        // #7/#8 soak ESE/WNW puddles (second soak - half radius)
         positions.set(1, new THREE.Vector3(0, y, safeZ))
         positions.set(2, new THREE.Vector3(safeX, y, -safeZ / 2))
         positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
         positions.set(4, new THREE.Vector3(safeX, y, 0))
         positions.set(5, new THREE.Vector3(-safeX, y, safeZ / 2))
         positions.set(6, new THREE.Vector3(safeX, y, safeZ / 2))
-        positions.set(7, new THREE.Vector3(-puddleX, y, 0)) // Soaking west
-        positions.set(8, new THREE.Vector3(puddleX, y, 0)) // Soaking east
+        positions.set(7, new THREE.Vector3(wnwPuddleX, y, wnwPuddleZ)) // Soaking WNW
+        positions.set(8, new THREE.Vector3(esePuddleX, y, esePuddleZ)) // Soaking ESE
         break
 
       case 'puddle-3':
         // Final soak - quarter radius
-        positions.set(1, new THREE.Vector3(-puddleX, y, 0)) // #1 soak west
-        positions.set(2, new THREE.Vector3(puddleX, y, 0)) // #2 soak east
+        positions.set(1, new THREE.Vector3(wnwPuddleX, y, wnwPuddleZ)) // #1 soak WNW
+        positions.set(2, new THREE.Vector3(esePuddleX, y, esePuddleZ)) // #2 soak ESE
         positions.set(3, new THREE.Vector3(-safeX, y, -safeZ / 2))
         positions.set(4, new THREE.Vector3(safeX, y, -safeZ / 2))
         positions.set(5, new THREE.Vector3(-safeX, y, safeZ / 2))
@@ -258,11 +267,75 @@ export class Game {
   }
 
   /**
-   * Set NPC positions for current phase (NPCs only, player must move themselves)
+   * Add random offset to simulate realistic player positioning.
+   * Returns the coordinate with +/- 0.5 random offset.
    */
-  private setNPCPositions(phase: string): void {
-    const positions = this.getBraindeadPositions(phase)
-    this.npcManager.setScriptedPositionsByNumber(positions, this.playerNumber)
+  private randomizeCoord(value: number): number {
+    return value + (Math.random() - 0.5)
+  }
+
+  /**
+   * Check if a position should be kept precise (corner positions at +/-12, +/-12).
+   */
+  private isCornerPosition(x: number, z: number): boolean {
+    return Math.abs(Math.abs(x) - 12) < 0.01 && Math.abs(Math.abs(z) - 12) < 0.01
+  }
+
+  /**
+   * Apply randomization to a map of positions.
+   * Positions at corners (+/-12, +/-12) are kept exact.
+   */
+  private randomizePositions(positions: Map<number, THREE.Vector3>): Map<number, THREE.Vector3> {
+    const randomized = new Map<number, THREE.Vector3>()
+    for (const [num, pos] of positions) {
+      if (this.isCornerPosition(pos.x, pos.z)) {
+        randomized.set(num, pos.clone())
+      } else {
+        randomized.set(num, new THREE.Vector3(
+          this.randomizeCoord(pos.x),
+          pos.y,
+          this.randomizeCoord(pos.z)
+        ))
+      }
+    }
+    return randomized
+  }
+
+  /**
+   * Set a single party member's target position.
+   * If it's an NPC, sets their scripted position. Player must move themselves.
+   * Adds +/- 0.5 randomization unless it's a corner position (+/-12, +/-12).
+   * @param partyNum Party number (1-8)
+   * @param x X coordinate
+   * @param z Z coordinate
+   */
+  private setPartyMemberTarget(partyNum: number, x: number, z: number): void {
+    if (partyNum === this.playerNumber) {
+      // Player must move themselves, we don't control them
+      return
+    }
+
+    // Apply randomization unless it's a corner position
+    let finalX = x
+    let finalZ = z
+    if (!this.isCornerPosition(x, z)) {
+      finalX = this.randomizeCoord(x)
+      finalZ = this.randomizeCoord(z)
+    }
+
+    // Find NPC index for this party number
+    let npcIndex = 0
+    for (let num = 1; num <= 8; num++) {
+      if (num === this.playerNumber) continue
+      if (num === partyNum) {
+        this.npcManager.setScriptedPosition(
+          npcIndex,
+          new THREE.Vector3(finalX, PLAYER_HEIGHT / 2, finalZ)
+        )
+        return
+      }
+      npcIndex++
+    }
   }
 
   /**
@@ -404,21 +477,32 @@ export class Game {
       ? new THREE.Vector3(-ccCoord, 0, -ccCoord) // NW (opposite)
       : new THREE.Vector3(ccCoord, 0, -ccCoord) // NE (opposite)
 
-    // Puddle positions (touching E/W walls)
+    // Puddle positions (rotated 22.5° clockwise from E/W - ESE/WNW, tangent to arena edge)
     const puddleRadius = 0.4 * ARENA_RADIUS
-    const puddleX = ARENA_RADIUS - puddleRadius
-    const westPuddlePos = new THREE.Vector3(-puddleX, 0, 0)
-    const eastPuddlePos = new THREE.Vector3(puddleX, 0, 0)
+    const puddleDistance = ARENA_RADIUS - puddleRadius
+    const puddleAngle = (22.5 * Math.PI) / 180
+    const puddleCos = Math.cos(puddleAngle)
+    const puddleSin = Math.sin(puddleAngle)
+    const wnwPuddlePos = new THREE.Vector3(
+      -puddleDistance * puddleCos,
+      0,
+      -puddleDistance * puddleSin
+    )
+    const esePuddlePos = new THREE.Vector3(
+      puddleDistance * puddleCos,
+      0,
+      puddleDistance * puddleSin
+    )
 
     // ==================== t=0: Spawn bosses ====================
     this.timeline.addEvent({
       id: 'boss-spawn',
       time: 0.1,
       handler: () => {
-        // Teleport all NPCs to center
-        const startPos = this.getBraindeadPositions('start')
+        // Teleport all NPCs to center with slight randomization
+        const startPos = this.randomizePositions(this.getBraindeadPositions('start'))
         this.npcManager.teleportByNumber(startPos, this.playerNumber)
-        this.setNPCPositions('start')
+        this.npcManager.setScriptedPositionsByNumber(startPos, this.playerNumber)
 
         // Alexander Prime south (fully outside arena - radius 1.0m)
         this.bossManager.show('alexanderPrime', new THREE.Vector3(0, 0, ARENA_RADIUS + 1.5))
@@ -489,32 +573,45 @@ export class Game {
             npcIndex++
           }
         }
-
-        // NPCs spread out
-        this.setNPCPositions('spread')
       },
     })
 
-    // ==================== t=11: Spawn puddles E/W ====================
+    // ==================== t=8: Initial spread positions ====================
+    this.timeline.addEvent({
+      id: 'npc-move-t8',
+      time: 8.0,
+      handler: () => {
+        this.setPartyMemberTarget(1, -12, -12)
+        this.setPartyMemberTarget(2, 12, -12)
+        this.setPartyMemberTarget(3, -12, 12)
+        this.setPartyMemberTarget(4, 12, 12)
+        this.setPartyMemberTarget(5, -16, -5.5)
+        this.setPartyMemberTarget(6, 16, -5.5)
+        this.setPartyMemberTarget(7, -16, -5.5)
+        this.setPartyMemberTarget(8, 16, -5.5)
+      },
+    })
+
+    // ==================== t=11: Spawn puddles ESE/WNW ====================
     this.timeline.addEvent({
       id: 'puddles-spawn',
       time: 11.0,
       handler: () => {
-        // West puddle
+        // WNW puddle
         this.aoeManager.spawn({
           id: 'puddle-west',
           shape: 'puddle',
-          position: westPuddlePos,
+          position: wnwPuddlePos,
           soakRadius: puddleRadius,
           soakCount: 1,
           telegraphDuration: 999, // Don't auto-resolve, we check manually
         })
 
-        // East puddle
+        // ESE puddle
         this.aoeManager.spawn({
           id: 'puddle-east',
           shape: 'puddle',
-          position: eastPuddlePos,
+          position: esePuddlePos,
           soakRadius: puddleRadius,
           soakCount: 1,
           telegraphDuration: 999,
@@ -562,7 +659,7 @@ export class Game {
       },
     })
 
-    // ==================== t=17: BJ lands (8y circular AoE) ====================
+    // ==================== t=17: BJ lands (8y circular AoE) + movement ====================
     this.timeline.addEvent({
       id: 'bj-land-aoe',
       time: 17.0,
@@ -572,9 +669,13 @@ export class Game {
           id: 'bj-land',
           shape: 'circle',
           position: bjPos,
-          radius: 8,
+          radius: 12,
           telegraphDuration: 0.3,
         })
+
+        // Players 7 & 8 move to puddle positions
+        this.setPartyMemberTarget(7, -17, 0)
+        this.setPartyMemberTarget(8, 17, 0)
       },
     })
 
@@ -598,7 +699,7 @@ export class Game {
           shape: 'line',
           position: dashCenter,
           length: dashLength,
-          width: 2,
+          width: 8,
           rotation: dashRotation,
           telegraphDuration: 0.5,
         })
@@ -621,50 +722,56 @@ export class Game {
           shape: 'plus',
           position: apPos,
           armLength: ARENA_RADIUS,
-          armWidth: 4,
+          armWidth: 12,
           telegraphDuration: 6.0, // Fires at t=24
         })
 
-        // Move NPCs for BJ bait
-        this.setNPCPositions('bj-bait')
+        // Player 6 moves
+        this.setPartyMemberTarget(6, 14, 0)
       },
     })
 
-    // ==================== t=19: BJ 90° arena-radius cone ====================
-    this.timeline.addEvent({
-      id: 'bj-cone',
-      time: 19.0,
-      handler: () => {
-        const bjPos = this.bossManager.getPosition('bruteJustice')!
-        const farthestNum = this.getFarthestPlayerFrom(bjPos)
-        const targetPos = this.getEntityPosition(farthestNum)!
-        this.bossManager.lookAt('bruteJustice', targetPos)
+    // ==================== t=19-24: BJ 90° cone every 0.5s ====================
+    // BJ fires cone at farthest player every 0.5 seconds from t=19 to t=24
+    // Direction is locked to farthest player at t=19
+    let bjConeRotation: number | null = null
+    for (let i = 0; i <= 10; i++) {
+      const coneTime = 19.0 + i * 0.5
+      this.timeline.addEvent({
+        id: `bj-cone-${i}`,
+        time: coneTime,
+        handler: () => {
+          const bjPos = this.bossManager.getPosition('bruteJustice')!
 
-        const coneDir = targetPos.clone().sub(bjPos).normalize()
-        const coneRotation = Math.atan2(coneDir.x, coneDir.z)
+          // First cone: calculate direction to farthest player and lock it
+          if (bjConeRotation === null) {
+            const farthestNum = this.getFarthestPlayerFrom(bjPos)
+            const targetPos = this.getEntityPosition(farthestNum)!
+            const coneDir = targetPos.clone().sub(bjPos).normalize()
+            bjConeRotation = Math.atan2(coneDir.x, coneDir.z)
+            this.bossManager.lookAt('bruteJustice', targetPos)
+          }
 
-        this.aoeManager.spawn({
-          id: 'bj-cone',
-          shape: 'cone',
-          position: bjPos,
-          radius: ARENA_RADIUS,
-          angle: Math.PI / 2, // 90°
-          rotation: coneRotation,
-          telegraphDuration: 1.0,
-        })
-      },
-    })
+          this.aoeManager.spawn({
+            id: `bj-cone-${i}`,
+            shape: 'cone',
+            position: bjPos,
+            radius: 24,
+            angle: Math.PI / 2, // 90°
+            rotation: bjConeRotation,
+            telegraphDuration: 0.4,
+          })
+        },
+      })
+    }
 
-    // ==================== t=20: CC teleport behind #3, cone ====================
+    // ==================== t=20: CC teleport behind #3, cone + movement ====================
     this.timeline.addEvent({
       id: 'cc-cone-3',
       time: 20.0,
       handler: () => {
         // CC teleports to #3 and fires cone
         this.spawnCruiseChaserCone(3, 'cc-cone-3')
-
-        // NPCs move to first puddle soak positions
-        this.setNPCPositions('puddle-1')
       },
     })
 
@@ -680,14 +787,14 @@ export class Game {
       },
     })
 
-    // ==================== t=22: Puddles respawn half radius, CC dash to #4 ====================
+    // ==================== t=22: Puddles respawn at 65% radius, CC dash to #4, movement ====================
     this.timeline.addEvent({
       id: 'puddle-respawn-1',
       time: 22.0,
       handler: () => {
-        // Respawn puddles at half radius
-        this.aoeManager.respawnPuddle('puddle-west', puddleRadius / 2, 999)
-        this.aoeManager.respawnPuddle('puddle-east', puddleRadius / 2, 999)
+        // Respawn puddles at 65% radius (shrink by 35%)
+        this.aoeManager.respawnPuddle('puddle-west', puddleRadius * 0.65, 999)
+        this.aoeManager.respawnPuddle('puddle-east', puddleRadius * 0.65, 999)
 
         // CC dashes to #4 (line AoE + boss movement)
         const ccPos = this.bossManager.getPosition('cruiseChaser')!
@@ -704,7 +811,7 @@ export class Game {
           shape: 'line',
           position: dashCenter,
           length: dashLength,
-          width: 2,
+          width: 8,
           rotation: dashRotation,
           telegraphDuration: 0.5,
         })
@@ -720,8 +827,13 @@ export class Game {
           }
         )
 
-        // NPCs move to second puddle soak positions
-        this.setNPCPositions('puddle-2')
+        // Players 1, 2, 5, 6, 7, 8 move
+        this.setPartyMemberTarget(1, -17, 0)
+        this.setPartyMemberTarget(2, 17, 0)
+        this.setPartyMemberTarget(5, -12, -12)
+        this.setPartyMemberTarget(6, 12, -12)
+        this.setPartyMemberTarget(7, -13, 0)
+        this.setPartyMemberTarget(8, 13, 0)
       },
     })
 
@@ -737,7 +849,7 @@ export class Game {
       },
     })
 
-    // ==================== t=25: Second puddle soak check ====================
+    // ==================== t=25: Second puddle soak check + movement ====================
     this.timeline.addEvent({
       id: 'puddle-check-2',
       time: 25.0,
@@ -746,17 +858,21 @@ export class Game {
         this.aoeManager.checkPuddleSoak('puddle-west', positions)
         this.aoeManager.checkPuddleSoak('puddle-east', positions)
         // Failure disabled for now
+
+        // Players 3 & 4 move to puddle positions
+        this.setPartyMemberTarget(3, -17, 0)
+        this.setPartyMemberTarget(4, 17, 0)
       },
     })
 
-    // ==================== t=26: Puddles respawn quarter radius, CC dash to #6 ====================
+    // ==================== t=26: Puddles respawn at 42% radius, CC dash to #6, movement ====================
     this.timeline.addEvent({
       id: 'puddle-respawn-2',
       time: 26.0,
       handler: () => {
-        // Respawn puddles at quarter radius
-        this.aoeManager.respawnPuddle('puddle-west', puddleRadius / 4, 999)
-        this.aoeManager.respawnPuddle('puddle-east', puddleRadius / 4, 999)
+        // Respawn puddles at ~42% radius (shrink by 35% again)
+        this.aoeManager.respawnPuddle('puddle-west', puddleRadius * 0.65 * 0.65, 999)
+        this.aoeManager.respawnPuddle('puddle-east', puddleRadius * 0.65 * 0.65, 999)
 
         // CC dashes to #6 (line AoE + boss movement)
         const ccPos = this.bossManager.getPosition('cruiseChaser')!
@@ -773,7 +889,7 @@ export class Game {
           shape: 'line',
           position: dashCenter,
           length: dashLength,
-          width: 2,
+          width: 8,
           rotation: dashRotation,
           telegraphDuration: 0.5,
         })
@@ -789,8 +905,11 @@ export class Game {
           }
         )
 
-        // NPCs move to final puddle soak positions
-        this.setNPCPositions('puddle-3')
+        // Players 1, 2, 7, 8 move to final positions
+        this.setPartyMemberTarget(1, -10.4, -4.1)
+        this.setPartyMemberTarget(2, 10.4, 4.1)
+        this.setPartyMemberTarget(7, -12, 12)
+        this.setPartyMemberTarget(8, 12, 12)
       },
     })
 
@@ -840,7 +959,7 @@ export class Game {
           shape: 'line',
           position: dashCenter,
           length: dashLength,
-          width: 2,
+          width: 8,
           rotation: dashRotation,
           telegraphDuration: 0.5,
         })
@@ -856,9 +975,6 @@ export class Game {
             this.bossManager.hide('cruiseChaser')
             this.bossManager.hide('bruteJustice')
             this.bossManager.hide('alexanderPrime')
-
-            // Move to final positions
-            this.setNPCPositions('final')
           }
         )
       },
@@ -946,7 +1062,9 @@ export class Game {
 
   /**
    * Trigger failure state when player is hit by an AoE.
+   * Currently unused - damage doesn't end encounter for now.
    */
+  // @ts-ignore: Intentionally unused - will be connected when failure logic is enabled
   private triggerFailure(): void {
     if (this.gameState !== 'playing') return
     this.gameState = 'failed'

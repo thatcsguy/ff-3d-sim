@@ -6,9 +6,10 @@ import {
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
   ARENA_RADIUS,
+  PLAYER_SPEED,
 } from './constants'
 
-const NPC_SPEED = 2.0 // meters per second (slower than player)
+const NPC_SPEED = PLAYER_SPEED // Same speed as player
 const NPC_COLORS = [
   0xe74c3c, // red
   0x2ecc71, // green

@@ -11,7 +11,7 @@ export type BossType = 'cruiseChaser' | 'bruteJustice' | 'alexanderPrime'
 
 interface Boss {
   type: BossType
-  mesh: THREE.Mesh
+  mesh: THREE.Group
   visible: boolean
 }
 
@@ -34,26 +34,25 @@ interface DashAnimation {
   onComplete?: () => void
 }
 
-// Boss dimensions and colors
+// Boss dimensions and colors (~5x player height of 1.8m = ~9m)
 const BOSS_CONFIG = {
   cruiseChaser: {
-    // Slim cylinder - agile robot
-    radius: 0.6,
-    height: 2.5,
+    // Sleek transformer robot with wings
+    height: 9.0,
     color: 0x4a90d9, // Steel blue
+    accentColor: 0x2c5aa0, // Darker blue
   },
   bruteJustice: {
-    // Wide box - bulky mech
-    width: 2.0,
-    height: 2.2,
-    depth: 1.5,
+    // Bulky super robot mech
+    height: 9.0,
     color: 0x8b4513, // Saddle brown (rust)
+    accentColor: 0xff6b35, // Orange accent
   },
   alexanderPrime: {
-    // Tall pillar - giant robot
-    radius: 1.0,
-    height: 5.0,
+    // Angelic golden robot with halo
+    height: 9.0,
     color: 0xffd700, // Gold
+    accentColor: 0xffffff, // White
   },
 } as const
 
@@ -86,27 +85,84 @@ export class BossManager {
     if (!this.scene) return
 
     const config = BOSS_CONFIG.cruiseChaser
-    const geometry = new THREE.CylinderGeometry(
-      config.radius,
-      config.radius,
-      config.height,
-      16
-    )
-    const material = new THREE.MeshStandardMaterial({
-      color: config.color,
-      metalness: 0.7,
-      roughness: 0.3,
-    })
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.position.set(0, config.height / 2, 0)
-    mesh.castShadow = true
-    mesh.visible = false // Hidden until mechanic starts
+    const H = config.height
+    const group = new THREE.Group()
 
-    this.scene.add(mesh)
+    const mainMat = new THREE.MeshStandardMaterial({
+      color: config.color,
+      metalness: 0.8,
+      roughness: 0.2,
+    })
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: config.accentColor,
+      metalness: 0.9,
+      roughness: 0.1,
+    })
+
+    // Torso - tapered octagonal body
+    const torsoGeo = new THREE.CylinderGeometry(0.6, 0.8, H * 0.35, 8)
+    const torso = new THREE.Mesh(torsoGeo, mainMat)
+    torso.position.y = H * 0.45
+    torso.castShadow = true
+    group.add(torso)
+
+    // Head - angular cockpit shape
+    const headGeo = new THREE.ConeGeometry(0.5, H * 0.15, 6)
+    const head = new THREE.Mesh(headGeo, accentMat)
+    head.position.y = H * 0.7
+    head.rotation.x = Math.PI // Point down for cockpit look
+    head.castShadow = true
+    group.add(head)
+
+    // Head visor
+    const visorGeo = new THREE.BoxGeometry(0.6, 0.1, 0.3)
+    const visor = new THREE.Mesh(visorGeo, accentMat)
+    visor.position.set(0, H * 0.75, 0.3)
+    group.add(visor)
+
+    // Left wing blade
+    const wingGeo = new THREE.BoxGeometry(2.5, 0.1, 0.8)
+    const leftWing = new THREE.Mesh(wingGeo, mainMat)
+    leftWing.position.set(-1.5, H * 0.55, -0.2)
+    leftWing.rotation.z = -0.3
+    leftWing.rotation.y = -0.2
+    leftWing.castShadow = true
+    group.add(leftWing)
+
+    // Right wing blade
+    const rightWing = new THREE.Mesh(wingGeo, mainMat)
+    rightWing.position.set(1.5, H * 0.55, -0.2)
+    rightWing.rotation.z = 0.3
+    rightWing.rotation.y = 0.2
+    rightWing.castShadow = true
+    group.add(rightWing)
+
+    // Waist
+    const waistGeo = new THREE.CylinderGeometry(0.5, 0.6, H * 0.1, 8)
+    const waist = new THREE.Mesh(waistGeo, accentMat)
+    waist.position.y = H * 0.25
+    waist.castShadow = true
+    group.add(waist)
+
+    // Left leg
+    const legGeo = new THREE.CylinderGeometry(0.25, 0.35, H * 0.25, 8)
+    const leftLeg = new THREE.Mesh(legGeo, mainMat)
+    leftLeg.position.set(-0.4, H * 0.1, 0)
+    leftLeg.castShadow = true
+    group.add(leftLeg)
+
+    // Right leg
+    const rightLeg = new THREE.Mesh(legGeo, mainMat)
+    rightLeg.position.set(0.4, H * 0.1, 0)
+    rightLeg.castShadow = true
+    group.add(rightLeg)
+
+    group.visible = false
+    this.scene.add(group)
 
     this.bosses.set('cruiseChaser', {
       type: 'cruiseChaser',
-      mesh,
+      mesh: group,
       visible: false,
     })
   }
@@ -115,26 +171,94 @@ export class BossManager {
     if (!this.scene) return
 
     const config = BOSS_CONFIG.bruteJustice
-    const geometry = new THREE.BoxGeometry(
-      config.width,
-      config.height,
-      config.depth
-    )
-    const material = new THREE.MeshStandardMaterial({
+    const H = config.height
+    const group = new THREE.Group()
+
+    const mainMat = new THREE.MeshStandardMaterial({
       color: config.color,
+      metalness: 0.6,
+      roughness: 0.4,
+    })
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: config.accentColor,
       metalness: 0.7,
       roughness: 0.3,
     })
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.position.set(0, config.height / 2, 0)
-    mesh.castShadow = true
-    mesh.visible = false // Hidden until mechanic starts
 
-    this.scene.add(mesh)
+    // Main torso - thick box
+    const torsoGeo = new THREE.BoxGeometry(2.0, H * 0.35, 1.5)
+    const torso = new THREE.Mesh(torsoGeo, mainMat)
+    torso.position.y = H * 0.5
+    torso.castShadow = true
+    group.add(torso)
+
+    // Head - box with visor
+    const headGeo = new THREE.BoxGeometry(1.0, H * 0.12, 0.8)
+    const head = new THREE.Mesh(headGeo, mainMat)
+    head.position.y = H * 0.75
+    head.castShadow = true
+    group.add(head)
+
+    // Visor stripe
+    const visorGeo = new THREE.BoxGeometry(1.1, H * 0.03, 0.3)
+    const visor = new THREE.Mesh(visorGeo, accentMat)
+    visor.position.set(0, H * 0.76, 0.35)
+    group.add(visor)
+
+    // Left shoulder armor
+    const shoulderGeo = new THREE.BoxGeometry(1.0, H * 0.12, 1.0)
+    const leftShoulder = new THREE.Mesh(shoulderGeo, mainMat)
+    leftShoulder.position.set(-1.5, H * 0.6, 0)
+    leftShoulder.rotation.z = -0.2
+    leftShoulder.castShadow = true
+    group.add(leftShoulder)
+
+    // Right shoulder armor
+    const rightShoulder = new THREE.Mesh(shoulderGeo, mainMat)
+    rightShoulder.position.set(1.5, H * 0.6, 0)
+    rightShoulder.rotation.z = 0.2
+    rightShoulder.castShadow = true
+    group.add(rightShoulder)
+
+    // Left arm
+    const armGeo = new THREE.CylinderGeometry(0.35, 0.4, H * 0.25, 8)
+    const leftArm = new THREE.Mesh(armGeo, accentMat)
+    leftArm.position.set(-1.5, H * 0.38, 0)
+    leftArm.castShadow = true
+    group.add(leftArm)
+
+    // Right arm
+    const rightArm = new THREE.Mesh(armGeo, accentMat)
+    rightArm.position.set(1.5, H * 0.38, 0)
+    rightArm.castShadow = true
+    group.add(rightArm)
+
+    // Waist/pelvis
+    const waistGeo = new THREE.BoxGeometry(1.5, H * 0.08, 1.2)
+    const waist = new THREE.Mesh(waistGeo, accentMat)
+    waist.position.y = H * 0.28
+    waist.castShadow = true
+    group.add(waist)
+
+    // Left leg - thick cylinder
+    const legGeo = new THREE.CylinderGeometry(0.4, 0.5, H * 0.28, 8)
+    const leftLeg = new THREE.Mesh(legGeo, mainMat)
+    leftLeg.position.set(-0.5, H * 0.1, 0)
+    leftLeg.castShadow = true
+    group.add(leftLeg)
+
+    // Right leg
+    const rightLeg = new THREE.Mesh(legGeo, mainMat)
+    rightLeg.position.set(0.5, H * 0.1, 0)
+    rightLeg.castShadow = true
+    group.add(rightLeg)
+
+    group.visible = false
+    this.scene.add(group)
 
     this.bosses.set('bruteJustice', {
       type: 'bruteJustice',
-      mesh,
+      mesh: group,
       visible: false,
     })
   }
@@ -143,27 +267,90 @@ export class BossManager {
     if (!this.scene) return
 
     const config = BOSS_CONFIG.alexanderPrime
-    const geometry = new THREE.CylinderGeometry(
-      config.radius,
-      config.radius,
-      config.height,
-      16
-    )
-    const material = new THREE.MeshStandardMaterial({
+    const H = config.height
+    const group = new THREE.Group()
+
+    const mainMat = new THREE.MeshStandardMaterial({
       color: config.color,
-      metalness: 0.7,
+      metalness: 0.9,
+      roughness: 0.1,
+    })
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: config.accentColor,
+      metalness: 0.5,
       roughness: 0.3,
     })
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.position.set(0, config.height / 2, 0)
-    mesh.castShadow = true
-    mesh.visible = false // Hidden until mechanic starts
 
-    this.scene.add(mesh)
+    // Main body - tall cylinder
+    const bodyGeo = new THREE.CylinderGeometry(0.9, 1.2, H * 0.45, 12)
+    const body = new THREE.Mesh(bodyGeo, mainMat)
+    body.position.y = H * 0.5
+    body.castShadow = true
+    group.add(body)
+
+    // Head - sphere
+    const headGeo = new THREE.SphereGeometry(0.6, 16, 12)
+    const head = new THREE.Mesh(headGeo, mainMat)
+    head.position.y = H * 0.8
+    head.castShadow = true
+    group.add(head)
+
+    // Halo ring
+    const haloGeo = new THREE.TorusGeometry(1.0, 0.08, 8, 24)
+    const halo = new THREE.Mesh(haloGeo, accentMat)
+    halo.position.y = H * 0.92
+    halo.rotation.x = Math.PI / 2
+    group.add(halo)
+
+    // Left shoulder sphere
+    const shoulderGeo = new THREE.SphereGeometry(0.5, 12, 8)
+    const leftShoulder = new THREE.Mesh(shoulderGeo, mainMat)
+    leftShoulder.position.set(-1.3, H * 0.65, 0)
+    leftShoulder.castShadow = true
+    group.add(leftShoulder)
+
+    // Right shoulder sphere
+    const rightShoulder = new THREE.Mesh(shoulderGeo, mainMat)
+    rightShoulder.position.set(1.3, H * 0.65, 0)
+    rightShoulder.castShadow = true
+    group.add(rightShoulder)
+
+    // Left arm - extended outward
+    const armGeo = new THREE.CylinderGeometry(0.2, 0.3, H * 0.3, 8)
+    const leftArm = new THREE.Mesh(armGeo, mainMat)
+    leftArm.position.set(-2.0, H * 0.55, 0)
+    leftArm.rotation.z = Math.PI / 3
+    leftArm.castShadow = true
+    group.add(leftArm)
+
+    // Right arm - extended outward
+    const rightArm = new THREE.Mesh(armGeo, mainMat)
+    rightArm.position.set(2.0, H * 0.55, 0)
+    rightArm.rotation.z = -Math.PI / 3
+    rightArm.castShadow = true
+    group.add(rightArm)
+
+    // Chest emblem
+    const emblemGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 6)
+    const emblem = new THREE.Mesh(emblemGeo, accentMat)
+    emblem.position.set(0, H * 0.55, 0.95)
+    emblem.rotation.x = Math.PI / 2
+    group.add(emblem)
+
+    // Lower robe/skirt - cone
+    const robeGeo = new THREE.ConeGeometry(1.8, H * 0.3, 12)
+    const robe = new THREE.Mesh(robeGeo, mainMat)
+    robe.position.y = H * 0.15
+    robe.rotation.x = Math.PI // Flip cone
+    robe.castShadow = true
+    group.add(robe)
+
+    group.visible = false
+    this.scene.add(group)
 
     this.bosses.set('alexanderPrime', {
       type: 'alexanderPrime',
-      mesh,
+      mesh: group,
       visible: false,
     })
   }
@@ -195,14 +382,13 @@ export class BossManager {
   }
 
   /**
-   * Set boss position (Y adjusted for height automatically).
+   * Set boss position (group origin is at ground level).
    */
   setPosition(type: BossType, position: THREE.Vector3): void {
     const boss = this.bosses.get(type)
     if (!boss) return
 
-    const height = this.getBossHeight(type)
-    boss.mesh.position.set(position.x, height / 2, position.z)
+    boss.mesh.position.set(position.x, 0, position.z)
   }
 
   /**
@@ -225,9 +411,9 @@ export class BossManager {
   }
 
   /**
-   * Get boss mesh (for advanced manipulation).
+   * Get boss mesh group (for advanced manipulation).
    */
-  getMesh(type: BossType): THREE.Mesh | null {
+  getMesh(type: BossType): THREE.Group | null {
     const boss = this.bosses.get(type)
     if (!boss) return null
     return boss.mesh
@@ -239,17 +425,6 @@ export class BossManager {
   isVisible(type: BossType): boolean {
     const boss = this.bosses.get(type)
     return boss?.visible ?? false
-  }
-
-  private getBossHeight(type: BossType): number {
-    switch (type) {
-      case 'cruiseChaser':
-        return BOSS_CONFIG.cruiseChaser.height
-      case 'bruteJustice':
-        return BOSS_CONFIG.bruteJustice.height
-      case 'alexanderPrime':
-        return BOSS_CONFIG.alexanderPrime.height
-    }
   }
 
   /**
@@ -385,10 +560,8 @@ export class BossManager {
         // Parabolic arc for Y: peaks at t=0.5
         // y = 4 * peakHeight * t * (1 - t)
         const arcY = 4 * this.activeJump.peakHeight * t * (1 - t)
-        const bossHeight = this.getBossHeight(this.activeJump.bossType)
-        const y = arcY + bossHeight / 2
 
-        boss.mesh.position.set(x, y, z)
+        boss.mesh.position.set(x, arcY, z)
 
         // Animation complete
         if (t >= 1) {
@@ -418,8 +591,7 @@ export class BossManager {
           this.activeDash.startPosition.z +
           (this.activeDash.endPosition.z - this.activeDash.startPosition.z) * t
 
-        const bossHeight = this.getBossHeight(this.activeDash.bossType)
-        boss.mesh.position.set(x, bossHeight / 2, z)
+        boss.mesh.position.set(x, 0, z)
 
         // Animation complete
         if (t >= 1) {
@@ -437,10 +609,15 @@ export class BossManager {
     if (this.scene) {
       for (const boss of this.bosses.values()) {
         this.scene.remove(boss.mesh)
-        boss.mesh.geometry.dispose()
-        if (boss.mesh.material instanceof THREE.Material) {
-          boss.mesh.material.dispose()
-        }
+        // Dispose all child meshes in the group
+        boss.mesh.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose()
+            if (child.material instanceof THREE.Material) {
+              child.material.dispose()
+            }
+          }
+        })
       }
     }
     this.bosses.clear()
