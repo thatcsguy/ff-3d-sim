@@ -2,7 +2,7 @@
 export const ARENA_RADIUS = 18.3 // 20 yalms in meters
 
 // Player settings
-export const PLAYER_SPEED = 6.5 // meters per second (FFXIV sprint speed)
+export const PLAYER_SPEED = 5.0 // meters per second (base walking speed)
 export const PLAYER_HEIGHT = 1.8 // meters
 export const PLAYER_RADIUS = 0.4 // meters
 

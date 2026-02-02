@@ -50,10 +50,6 @@ export class BuffDisplay {
     indicator.style.width = '36px'
     indicator.style.height = '36px'
     indicator.style.position = 'relative'
-    indicator.style.border = config.type === 'buff' ? '2px solid #4a9eff' : '2px solid #ff4a4a'
-    indicator.style.borderRadius = '4px'
-    indicator.style.background = '#1a1a1a'
-    indicator.style.overflow = 'hidden'
 
     // Icon
     if (config.iconUrl) {
@@ -67,26 +63,20 @@ export class BuffDisplay {
       indicator.appendChild(icon)
     }
 
-    // Timer overlay
-    const timerOverlay = document.createElement('div')
-    timerOverlay.style.position = 'absolute'
-    timerOverlay.style.bottom = '0'
-    timerOverlay.style.left = '0'
-    timerOverlay.style.width = '100%'
-    timerOverlay.style.background = 'rgba(0, 0, 0, 0.7)'
-    timerOverlay.style.textAlign = 'center'
-    timerOverlay.style.padding = '1px 0'
-    indicator.appendChild(timerOverlay)
-
     // Timer text
     const timerText = document.createElement('span')
     timerText.textContent = Math.ceil(remainingTime).toString()
+    timerText.style.position = 'absolute'
+    timerText.style.bottom = '0'
+    timerText.style.left = '0'
+    timerText.style.width = '100%'
     timerText.style.color = '#fff'
     timerText.style.fontSize = '11px'
     timerText.style.fontFamily = 'sans-serif'
     timerText.style.fontWeight = 'bold'
+    timerText.style.textAlign = 'center'
     timerText.style.textShadow = '1px 1px 1px #000'
-    timerOverlay.appendChild(timerText)
+    indicator.appendChild(timerText)
 
     return indicator
   }
