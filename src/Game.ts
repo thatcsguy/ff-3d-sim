@@ -8,7 +8,7 @@ import { NPCManager } from './NPCManager'
 import { HUD } from './HUD'
 import { SettingsMenu } from './SettingsMenu'
 import { Timeline } from './Timeline'
-import { AoEManager } from './AoEManager'
+import { AoEManager, EntityPosition } from './AoEManager'
 import { BossManager } from './BossManager'
 import { NumberSpriteManager } from './NumberSpriteManager'
 import { ResultOverlay } from './ResultOverlay'
@@ -345,21 +345,21 @@ export class Game {
   /**
    * Set a single party member's target position.
    * If it's an NPC, sets their scripted position. Player must move themselves.
-   * Adds +/- 0.5 randomization unless it's a corner position (+/-12, +/-12).
    * @param partyNum Party number (1-8)
    * @param x X coordinate
    * @param z Z coordinate
+   * @param jitter Whether to add +/- 0.5 randomization (default: true, but false for corner positions)
    */
-  private setPartyMemberTarget(partyNum: number, x: number, z: number): void {
+  private setPartyMemberTarget(partyNum: number, x: number, z: number, jitter: boolean = true): void {
     if (partyNum === this.playerNumber) {
       // Player must move themselves, we don't control them
       return
     }
 
-    // Apply randomization unless it's a corner position
+    // Apply randomization if jitter is enabled and not a corner position
     let finalX = x
     let finalZ = z
-    if (!this.isCornerPosition(x, z)) {
+    if (jitter && !this.isCornerPosition(x, z)) {
       finalX = this.randomizeCoord(x)
       finalZ = this.randomizeCoord(z)
     }
@@ -446,6 +446,38 @@ export class Game {
       }
     }
     return positions
+  }
+
+  /**
+   * Get entity ID string for a party number.
+   */
+  private getEntityId(partyNum: number): string {
+    return `party-${partyNum}`
+  }
+
+  /**
+   * Get all party members as EntityPosition array for collision detection.
+   * Player is always first in the array.
+   */
+  private getAllPartyEntities(): EntityPosition[] {
+    const entities: EntityPosition[] = []
+    // Add player first (for visual feedback in puddles etc)
+    entities.push({
+      id: this.getEntityId(this.playerNumber),
+      position: this.playerMesh.position.clone(),
+    })
+    // Add NPCs
+    for (let partyNum = 1; partyNum <= 8; partyNum++) {
+      if (partyNum === this.playerNumber) continue
+      const pos = this.getEntityPosition(partyNum)
+      if (pos) {
+        entities.push({
+          id: this.getEntityId(partyNum),
+          position: pos,
+        })
+      }
+    }
+    return entities
   }
 
   /**
@@ -794,6 +826,10 @@ export class Game {
 
         // Player 6 moves
         this.setPartyMemberTarget(6, 14, 0)
+
+        // Players 3 & 4 nudge slightly to dodge BJ cone (no jitter - precise positioning)
+        this.setPartyMemberTarget(3, -12.1, 12.1, false)
+        this.setPartyMemberTarget(4, 12.1, 12.1, false)
       },
     })
 
@@ -822,7 +858,7 @@ export class Game {
             id: `bj-cone-${i}`,
             shape: 'cone',
             position: bjPos,
-            radius: 24,
+            radius: 23.5,
             angle: Math.PI / 2, // 90°
             rotation: bjConeRotation,
             telegraphDuration: 0.4,
@@ -848,7 +884,7 @@ export class Game {
       handler: () => {
         const positions = this.getAllPartyPositions()
         if (!this.checkPuddlesSoaked(positions)) return
-        this.checkPlayerPuddleDebuff()
+        this.checkPuddleDebuffs()
       },
     })
 
@@ -921,7 +957,7 @@ export class Game {
       handler: () => {
         const positions = this.getAllPartyPositions()
         if (!this.checkPuddlesSoaked(positions)) return
-        this.checkPlayerPuddleDebuff()
+        this.checkPuddleDebuffs()
 
         // Players 3 & 4 move to puddle positions
         this.setPartyMemberTarget(3, -17, 0)
@@ -994,7 +1030,7 @@ export class Game {
       handler: () => {
         const positions = this.getAllPartyPositions()
         if (!this.checkPuddlesSoaked(positions)) return
-        this.checkPlayerPuddleDebuff()
+        this.checkPuddleDebuffs()
 
         // Remove puddles after final check
         this.aoeManager.remove('puddle-west')
@@ -1053,15 +1089,11 @@ export class Game {
   }
 
   private onKeyDown = (event: KeyboardEvent): void => {
-    // Start mechanic on Space key when in waiting state
-    if (event.key === ' ') {
+    // R key: start when waiting, restart when failed/clear
+    if (event.key === 'r' || event.key === 'R') {
       if (this.gameState === 'waiting') {
         this.startMechanic()
-      }
-    }
-    // Restart on R key when in failed or clear state
-    if (event.key === 'r' || event.key === 'R') {
-      if (this.gameState === 'failed' || this.gameState === 'clear') {
+      } else if (this.gameState === 'failed' || this.gameState === 'clear') {
         this.restart()
       }
     }
@@ -1071,6 +1103,35 @@ export class Game {
         this.abilitySystem.use('arms-length')
       }
       if (event.key === '2') {
+        this.abilitySystem.use('sprint')
+      }
+    }
+  }
+
+  /**
+   * Handle gamepad button inputs for abilities and start/restart.
+   * Button 0 (A/X): Start/Restart
+   * Button 1 (B/Circle): Sprint
+   * Button 2 (X/Square): Arms Length
+   */
+  private handleGamepadInput(): void {
+    // Button 0 (A/X): Start or Restart
+    if (this.inputManager.isButtonJustPressed(0)) {
+      if (this.gameState === 'waiting') {
+        this.startMechanic()
+      } else if (this.gameState === 'failed' || this.gameState === 'clear') {
+        this.restart()
+      }
+    }
+
+    // Ability buttons only while playing
+    if (this.gameState === 'playing') {
+      // Button 2 (X/Square): Arms Length
+      if (this.inputManager.isButtonJustPressed(2)) {
+        this.abilitySystem.use('arms-length')
+      }
+      // Button 1 (B/Circle): Sprint
+      if (this.inputManager.isButtonJustPressed(1)) {
         this.abilitySystem.use('sprint')
       }
     }
@@ -1137,51 +1198,106 @@ export class Game {
   }
 
   /**
-   * Apply debuffs when player is hit by AoEs.
+   * Apply debuffs when an entity is hit by AoEs.
    * Checks for lethal failure conditions before applying debuffs.
+   * @param entityId The entity ID (e.g., "party-1")
+   * @param partyNum The party number (1-8)
+   * @param hitIds Array of AoE IDs that hit this entity
    */
-  private applyAoEDebuffs(hitIds: string[]): void {
+  private applyAoEDebuffsToEntity(entityId: string, partyNum: number, hitIds: string[]): void {
+    const isPlayer = partyNum === this.playerNumber
+
     for (const id of hitIds) {
       // Brute Justice cone is always lethal
       if (id.startsWith('bj-cone')) {
-        this.triggerFailure("Hit by Brute Justice's Double Rocket Punch. This attack cannot be survived.")
+        const who = isPlayer ? 'You were' : `Party member ${partyNum} was`
+        this.triggerFailure(`${who} hit by Brute Justice's Double Rocket Punch. This attack cannot be survived.`)
         return
       }
 
       // Alexander Prime plus is always lethal
       if (id === 'ap-plus') {
-        this.triggerFailure("Hit by Alexander Prime's Sacrament. This attack cannot be survived.")
+        const who = isPlayer ? 'You were' : `Party member ${partyNum} was`
+        this.triggerFailure(`${who} hit by Alexander Prime's Sacrament. This attack cannot be survived.`)
         return
       }
 
       // Cruise Chaser attacks have conditional lethality
       if (id.startsWith('cc-')) {
-        const hasPhysVuln = this.buffManager.has('player', 'physical-vuln')
-        const hasArmsLength = this.buffManager.has('player', 'arms-length')
+        // Player uses 'player' entity ID for buffs, NPCs use party-N
+        const buffEntityId = isPlayer ? 'player' : entityId
+        const hasPhysVuln = this.buffManager.has(buffEntityId, 'physical-vuln')
 
         if (hasPhysVuln) {
-          this.triggerFailure('Hit by Cruise Chaser while Physical Vulnerability was active. The second hit is lethal.')
+          const who = isPlayer ? 'You were' : `Party member ${partyNum} was`
+          this.triggerFailure(`${who} hit by Cruise Chaser while Physical Vulnerability was active. The second hit is lethal.`)
           return
         }
 
-        if (!hasArmsLength) {
-          this.triggerFailure("Hit by Cruise Chaser without Arm's Length active. Use Arm's Length to survive the knockback.")
-          return
+        // NPCs don't need Arm's Length (assume always active)
+        // Player needs Arm's Length to survive knockback
+        if (isPlayer) {
+          const hasArmsLength = this.buffManager.has('player', 'arms-length')
+          if (!hasArmsLength) {
+            this.triggerFailure("Hit by Cruise Chaser without Arm's Length active. Use Arm's Length to survive the knockback.")
+            return
+          }
         }
 
         // Survived - apply debuffs
-        this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
-        this.buffManager.apply('player', DEBUFFS.PHYSICAL_VULN)
+        this.buffManager.apply(buffEntityId, DEBUFFS.MAGIC_VULN)
+        this.buffManager.apply(buffEntityId, DEBUFFS.PHYSICAL_VULN)
       }
     }
   }
 
   /**
-   * Check for chakram hits - being hit by a chakram is lethal.
+   * Process AoE hits for all entities.
    */
-  private applyChakramDebuffs(hitIds: string[]): void {
-    if (hitIds.length > 0) {
-      this.triggerFailure('Hit by Super Chakram. This attack cannot be survived.')
+  private processAoEHits(allHits: Map<string, string[]>): void {
+    // Build reverse map: AoE ID -> list of entities hit
+    const aoeToEntities = new Map<string, string[]>()
+    for (const [entityId, hitIds] of allHits) {
+      for (const aoeId of hitIds) {
+        if (!aoeToEntities.has(aoeId)) {
+          aoeToEntities.set(aoeId, [])
+        }
+        aoeToEntities.get(aoeId)!.push(entityId)
+      }
+    }
+
+    // Check if any CC ability hit multiple entities
+    for (const [aoeId, entities] of aoeToEntities) {
+      if (aoeId.startsWith('cc-') && entities.length > 1) {
+        const partyNums = entities.map(e => parseInt(e.split('-')[1]))
+        const isPlayerHit = partyNums.includes(this.playerNumber)
+        const who = isPlayerHit
+          ? `You and ${entities.length - 1} other party member(s) were`
+          : `${entities.length} party members were`
+        this.triggerFailure(`${who} hit by the same Cruise Chaser attack. Only one person should be hit.`)
+        return
+      }
+    }
+
+    // Process individual hits
+    for (const [entityId, hitIds] of allHits) {
+      const partyNum = parseInt(entityId.split('-')[1])
+      this.applyAoEDebuffsToEntity(entityId, partyNum, hitIds)
+    }
+  }
+
+  /**
+   * Process chakram hits for all entities - being hit by a chakram is lethal.
+   */
+  private processChakramHits(allHits: Map<string, string[]>): void {
+    for (const [entityId, hitIds] of allHits) {
+      if (hitIds.length > 0) {
+        const partyNum = parseInt(entityId.split('-')[1])
+        const isPlayer = partyNum === this.playerNumber
+        const who = isPlayer ? 'You were' : `Party member ${partyNum} was`
+        this.triggerFailure(`${who} hit by Super Chakram. This attack cannot be survived.`)
+        return
+      }
     }
   }
 
@@ -1205,23 +1321,32 @@ export class Game {
   }
 
   /**
-   * Check if player is inside a puddle at soak time and apply debuffs.
-   * Applies Magic Vuln (10s) + Vulnerability Up (3s) if player is in puddle.
-   * If player already has Magic Vulnerability, being in a puddle is lethal.
+   * Check all party members inside puddles at soak time and apply debuffs.
+   * Applies Magic Vuln (10s) + Vulnerability Up (3s) if in puddle.
+   * If entity already has Magic Vulnerability, being in a puddle is lethal.
    */
-  private checkPlayerPuddleDebuff(): void {
-    const playerPos = [this.playerMesh.position]
-    const inWest = this.aoeManager.checkPuddleSoak('puddle-west', playerPos)
-    const inEast = this.aoeManager.checkPuddleSoak('puddle-east', playerPos)
+  private checkPuddleDebuffs(): void {
+    for (let partyNum = 1; partyNum <= 8; partyNum++) {
+      const pos = this.getEntityPosition(partyNum)
+      if (!pos) continue
 
-    if (inWest || inEast) {
-      const hasMagicVuln = this.buffManager.has('player', 'magic-vuln')
-      if (hasMagicVuln) {
-        this.triggerFailure('Caught in puddle explosion while Magic Vulnerability was active. Only soak one puddle per set.')
-        return
+      const isPlayer = partyNum === this.playerNumber
+      // Player uses 'player' entity ID for buffs, NPCs use party-N
+      const buffEntityId = isPlayer ? 'player' : this.getEntityId(partyNum)
+      const posArray = [pos]
+      const inWest = this.aoeManager.checkPuddleSoak('puddle-west', posArray)
+      const inEast = this.aoeManager.checkPuddleSoak('puddle-east', posArray)
+
+      if (inWest || inEast) {
+        const hasMagicVuln = this.buffManager.has(buffEntityId, 'magic-vuln')
+        if (hasMagicVuln) {
+          const who = isPlayer ? 'You were' : `Party member ${partyNum} was`
+          this.triggerFailure(`${who} caught in puddle explosion while Magic Vulnerability was active. Only soak one puddle per set.`)
+          return
+        }
+        this.buffManager.apply(buffEntityId, DEBUFFS.MAGIC_VULN)
+        this.buffManager.apply(buffEntityId, DEBUFFS.VULN_UP)
       }
-      this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
-      this.buffManager.apply('player', DEBUFFS.VULN_UP)
     }
   }
 
@@ -1266,6 +1391,10 @@ export class Game {
   }
 
   private update(deltaTime: number): void {
+    // Check gamepad inputs first, then update state for next frame
+    this.handleGamepadInput()
+    this.inputManager.updateGamepadState()
+
     // Update ability cooldowns and buff durations
     this.abilitySystem.update(deltaTime)
     this.buffManager.update(deltaTime)
@@ -1288,13 +1417,14 @@ export class Game {
     // Update number sprites (follow their entities)
     this.numberSpriteManager.update()
 
-    // Update AoEs and check for hits
-    const aoeHits = this.aoeManager.update(deltaTime, this.playerMesh.position)
-    this.applyAoEDebuffs(aoeHits)
+    // Update AoEs and check for hits on all party members
+    const entities = this.getAllPartyEntities()
+    const aoeHits = this.aoeManager.update(deltaTime, entities)
+    this.processAoEHits(aoeHits)
 
-    // Update chakrams and check for hits
-    const chakramHits = this.chakramManager.update(deltaTime, this.playerMesh.position)
-    this.applyChakramDebuffs(chakramHits)
+    // Update chakrams and check for hits on all party members
+    const chakramHits = this.chakramManager.update(deltaTime, entities)
+    this.processChakramHits(chakramHits)
 
     // Check for success: timeline complete and no active AoEs, with a small delay
     if (this.gameState === 'playing' && this.timeline.isComplete()) {

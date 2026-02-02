@@ -6,6 +6,14 @@ import * as THREE from 'three'
 export type AoEShape = 'circle' | 'line' | 'cone' | 'tshape' | 'puddle' | 'plus'
 
 /**
+ * Entity position for multi-entity collision detection.
+ */
+export interface EntityPosition {
+  id: string // e.g., "party-1", "party-2"
+  position: THREE.Vector3
+}
+
+/**
  * Configuration for spawning an AoE.
  */
 export interface AoEConfig {
@@ -243,18 +251,20 @@ export class AoEManager {
   /**
    * Update all active AoEs. Call this every frame.
    * @param deltaTime Time elapsed since last update in seconds
-   * @param playerPosition Current player position for collision detection
-   * @returns Array of AoE IDs that hit the player this frame
+   * @param entities Array of entity positions to check for collisions
+   * @returns Map of entityId -> array of AoE IDs that hit them this frame
    */
-  update(deltaTime: number, playerPosition: THREE.Vector3): string[] {
-    const hits: string[] = []
+  update(deltaTime: number, entities: EntityPosition[]): Map<string, string[]> {
+    const allHits = new Map<string, string[]>()
 
     for (const [id, aoe] of this.activeAoEs) {
       aoe.elapsedTime += deltaTime
 
       // Handle puddle soaking separately from regular AoE resolution
       if (aoe.config.shape === 'puddle') {
-        this.updatePuddle(aoe, deltaTime, playerPosition)
+        // Use first entity position for visual feedback (typically player)
+        const firstPos = entities.length > 0 ? entities[0].position : new THREE.Vector3()
+        this.updatePuddle(aoe, deltaTime, firstPos)
         continue
       }
 
@@ -265,9 +275,14 @@ export class AoEManager {
         // Flash effect on resolution
         this.flashAoE(aoe)
 
-        // Check collision with player
-        if (this.checkCollision(aoe.config, playerPosition)) {
-          hits.push(id)
+        // Check collision with all entities
+        for (const entity of entities) {
+          if (this.checkCollision(aoe.config, entity.position)) {
+            if (!allHits.has(entity.id)) {
+              allHits.set(entity.id, [])
+            }
+            allHits.get(entity.id)!.push(id)
+          }
         }
 
         // Call the resolve callback if provided
@@ -280,7 +295,7 @@ export class AoEManager {
       }
     }
 
-    return hits
+    return allHits
   }
 
   /**

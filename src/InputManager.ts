@@ -7,7 +7,10 @@ export enum MouseButton {
 export interface GamepadState {
   connected: boolean
   index: number
+  id: string
 }
+
+export type ControllerType = 'xbox' | 'playstation' | 'unknown'
 
 export interface StickInput {
   x: number
@@ -25,7 +28,8 @@ export class InputManager {
   private mouseDelta: MouseDelta = { x: 0, y: 0 }
   private element: HTMLElement
   private isPointerLocked: boolean = false
-  private gamepad: GamepadState = { connected: false, index: -1 }
+  private gamepad: GamepadState = { connected: false, index: -1, id: '' }
+  private previousButtonStates: boolean[] = []
 
   constructor(element: HTMLElement = document.body) {
     this.element = element
@@ -89,11 +93,13 @@ export class InputManager {
   }
 
   private onGamepadConnected = (event: GamepadEvent): void => {
-    this.gamepad = { connected: true, index: event.gamepad.index }
+    this.gamepad = { connected: true, index: event.gamepad.index, id: event.gamepad.id }
+    this.previousButtonStates = []
   }
 
   private onGamepadDisconnected = (): void => {
-    this.gamepad = { connected: false, index: -1 }
+    this.gamepad = { connected: false, index: -1, id: '' }
+    this.previousButtonStates = []
   }
 
   isGamepadConnected(): boolean {
@@ -131,6 +137,54 @@ export class InputManager {
       return false
     }
     return gamepad.buttons[buttonIndex]?.pressed ?? false
+  }
+
+  /**
+   * Check if a button was just pressed this frame (rising edge detection).
+   * Call updateGamepadState() once per frame before checking.
+   */
+  isButtonJustPressed(buttonIndex: number): boolean {
+    if (!this.gamepad.connected) {
+      return false
+    }
+    const gamepad = navigator.getGamepads()[this.gamepad.index]
+    if (!gamepad) {
+      return false
+    }
+    const currentlyPressed = gamepad.buttons[buttonIndex]?.pressed ?? false
+    const wasPressed = this.previousButtonStates[buttonIndex] ?? false
+    return currentlyPressed && !wasPressed
+  }
+
+  /**
+   * Update gamepad button states. Call once per frame before checking isButtonJustPressed.
+   */
+  updateGamepadState(): void {
+    if (!this.gamepad.connected) {
+      return
+    }
+    const gamepad = navigator.getGamepads()[this.gamepad.index]
+    if (!gamepad) {
+      return
+    }
+    this.previousButtonStates = gamepad.buttons.map((b) => b.pressed)
+  }
+
+  /**
+   * Get the type of controller connected (xbox, playstation, or unknown).
+   */
+  getControllerType(): ControllerType {
+    if (!this.gamepad.connected) {
+      return 'unknown'
+    }
+    const id = this.gamepad.id.toLowerCase()
+    if (id.includes('xbox') || id.includes('xinput')) {
+      return 'xbox'
+    }
+    if (id.includes('dualshock') || id.includes('dualsense') || id.includes('054c') || id.includes('playstation')) {
+      return 'playstation'
+    }
+    return 'unknown'
   }
 
   isKeyDown(code: string): boolean {

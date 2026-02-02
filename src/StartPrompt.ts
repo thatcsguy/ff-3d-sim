@@ -32,7 +32,7 @@ export class StartPrompt {
     this.promptText.style.fontWeight = 'bold'
     this.promptText.style.color = '#ffffff'
     this.promptText.style.textShadow = '0 2px 4px rgba(0, 0, 0, 0.5)'
-    this.promptText.textContent = 'Press Space to start'
+    this.promptText.textContent = 'Press R to start'
     this.container.appendChild(this.promptText)
 
     document.body.appendChild(this.container)

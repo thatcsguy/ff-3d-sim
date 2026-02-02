@@ -1,6 +1,14 @@
 import * as THREE from 'three'
 
 /**
+ * Entity position for multi-entity collision detection.
+ */
+export interface EntityPosition {
+  id: string // e.g., "party-1", "party-2"
+  position: THREE.Vector3
+}
+
+/**
  * Configuration for spawning a chakram projectile.
  */
 export interface ChakramConfig {
@@ -142,11 +150,11 @@ export class ChakramManager {
   /**
    * Update all active chakrams.
    * @param deltaTime Time elapsed since last update in seconds
-   * @param playerPosition Current player position for collision detection
-   * @returns Array of chakram IDs that hit the player this frame
+   * @param entities Array of entity positions to check for collisions
+   * @returns Map of entityId -> array of chakram IDs that hit them this frame
    */
-  update(deltaTime: number, playerPosition: THREE.Vector3): string[] {
-    const hits: string[] = []
+  update(deltaTime: number, entities: EntityPosition[]): Map<string, string[]> {
+    const allHits = new Map<string, string[]>()
 
     for (const [id, chakram] of this.activeChakrams) {
       // Always spin the chakram
@@ -171,13 +179,18 @@ export class ChakramManager {
         (chakram.config.endPosition.z - chakram.config.startPosition.z) * progress
       chakram.mesh.position.set(currentX, 1.0, currentZ)
 
-      // Check collision with player
+      // Check collision with all entities
       if (!chakram.resolved) {
-        const dx = playerPosition.x - currentX
-        const dz = playerPosition.z - currentZ
-        const distanceSquared = dx * dx + dz * dz
-        if (distanceSquared <= chakram.config.hitRadius * chakram.config.hitRadius) {
-          hits.push(id)
+        for (const entity of entities) {
+          const dx = entity.position.x - currentX
+          const dz = entity.position.z - currentZ
+          const distanceSquared = dx * dx + dz * dz
+          if (distanceSquared <= chakram.config.hitRadius * chakram.config.hitRadius) {
+            if (!allHits.has(entity.id)) {
+              allHits.set(entity.id, [])
+            }
+            allHits.get(entity.id)!.push(id)
+          }
         }
       }
 
@@ -192,7 +205,7 @@ export class ChakramManager {
       }
     }
 
-    return hits
+    return allHits
   }
 
   /**
