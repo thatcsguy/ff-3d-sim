@@ -19,6 +19,7 @@ import { AbilitySystem } from './AbilitySystem'
 import { Hotbar } from './Hotbar'
 import { BuffDisplay } from './BuffDisplay'
 import { HumanoidMesh } from './HumanoidMesh'
+import { NumberPicker } from './NumberPicker'
 
 type GameState = 'waiting' | 'playing' | 'failed' | 'clear'
 
@@ -81,6 +82,9 @@ export class Game {
   private successCheckTime: number | null = null
   // Player's assigned party number for this attempt (1-8)
   private playerNumber: number = 1
+  // Forced player number (null = random, 1-8 = specific number)
+  private forcedPlayerNumber: number | null = null
+  private numberPicker!: NumberPicker
 
   constructor() {
     // Renderer setup
@@ -176,6 +180,10 @@ export class Game {
 
     // Start prompt setup
     this.startPrompt = new StartPrompt()
+
+    // Number picker setup (stored for lifecycle management)
+    this.numberPicker = new NumberPicker((num) => this.onNumberSelect(num))
+    void this.numberPicker
 
     // Chakram manager setup
     this.chakramManager = new ChakramManager(this.scene)
@@ -528,8 +536,12 @@ export class Game {
    * Setup the Wormhole Formation timeline matching accurate FFXIV mechanic.
    */
   private setupTestTimeline(): void {
-    // Randomly assign player number (1-8)
-    this.playerNumber = Math.floor(Math.random() * 8) + 1
+    // Assign player number (forced or random)
+    if (this.forcedPlayerNumber !== null) {
+      this.playerNumber = this.forcedPlayerNumber
+    } else {
+      this.playerNumber = Math.floor(Math.random() * 8) + 1
+    }
 
     // Enable scripted NPC movement
     this.npcManager.setScriptedMode(true)
@@ -1144,6 +1156,15 @@ export class Game {
     this.startPrompt.hide()
     this.gameState = 'playing'
     this.timeline.start()
+  }
+
+  /**
+   * Handle number picker selection.
+   * Sets the forced player number and restarts the encounter.
+   */
+  private onNumberSelect(num: number | null): void {
+    this.forcedPlayerNumber = num
+    this.restart()
   }
 
   /**

@@ -37,10 +37,10 @@ interface DashAnimation {
 // Boss dimensions and colors (~5x player height of 1.8m = ~9m)
 const BOSS_CONFIG = {
   cruiseChaser: {
-    // Sleek transformer robot with wings
+    // Sleek transformer robot with blade arms
     height: 9.0,
-    color: 0x4a90d9, // Steel blue
-    accentColor: 0x2c5aa0, // Darker blue
+    color: 0xff4500, // Red-orange
+    accentColor: 0xcc3700, // Darker red-orange
   },
   bruteJustice: {
     // Bulky super robot mech
@@ -99,63 +99,154 @@ export class BossManager {
       roughness: 0.1,
     })
 
-    // Torso - tapered octagonal body
-    const torsoGeo = new THREE.CylinderGeometry(0.6, 0.8, H * 0.35, 8)
-    const torso = new THREE.Mesh(torsoGeo, mainMat)
-    torso.position.y = H * 0.45
-    torso.castShadow = true
-    group.add(torso)
+    // === TORSO - Flipped tapered shape (wide at top, narrow at bottom) - touches waist ===
+    const midTorsoGeo = new THREE.CylinderGeometry(0.54, 0.18, H * 0.12, 6)
+    const midTorso = new THREE.Mesh(midTorsoGeo, mainMat)
+    midTorso.position.y = H * 0.37 // Lowered to touch waist (waist top at H*0.34)
+    midTorso.castShadow = true
+    group.add(midTorso)
 
-    // Head - angular cockpit shape
-    const headGeo = new THREE.ConeGeometry(0.5, H * 0.15, 6)
-    const head = new THREE.Mesh(headGeo, accentMat)
-    head.position.y = H * 0.7
-    head.rotation.x = Math.PI // Point down for cockpit look
-    head.castShadow = true
-    group.add(head)
-
-    // Head visor
-    const visorGeo = new THREE.BoxGeometry(0.6, 0.1, 0.3)
-    const visor = new THREE.Mesh(visorGeo, accentMat)
-    visor.position.set(0, H * 0.75, 0.3)
-    group.add(visor)
-
-    // Left wing blade
-    const wingGeo = new THREE.BoxGeometry(2.5, 0.1, 0.8)
-    const leftWing = new THREE.Mesh(wingGeo, mainMat)
-    leftWing.position.set(-1.5, H * 0.55, -0.2)
-    leftWing.rotation.z = -0.3
-    leftWing.rotation.y = -0.2
-    leftWing.castShadow = true
-    group.add(leftWing)
-
-    // Right wing blade
-    const rightWing = new THREE.Mesh(wingGeo, mainMat)
-    rightWing.position.set(1.5, H * 0.55, -0.2)
-    rightWing.rotation.z = 0.3
-    rightWing.rotation.y = 0.2
-    rightWing.castShadow = true
-    group.add(rightWing)
-
-    // Waist
-    const waistGeo = new THREE.CylinderGeometry(0.5, 0.6, H * 0.1, 8)
+    // === TINY WAIST ===
+    const waistGeo = new THREE.CylinderGeometry(0.15, 0.2, H * 0.06, 8)
     const waist = new THREE.Mesh(waistGeo, accentMat)
-    waist.position.y = H * 0.25
+    waist.position.y = H * 0.31
     waist.castShadow = true
     group.add(waist)
 
-    // Left leg
-    const legGeo = new THREE.CylinderGeometry(0.25, 0.35, H * 0.25, 8)
-    const leftLeg = new THREE.Mesh(legGeo, mainMat)
-    leftLeg.position.set(-0.4, H * 0.1, 0)
-    leftLeg.castShadow = true
-    group.add(leftLeg)
+    // === HEAD - Small angular ===
+    const headGeo = new THREE.ConeGeometry(0.2, H * 0.06, 6)
+    const head = new THREE.Mesh(headGeo, mainMat)
+    head.position.y = H * 0.49 // Lowered with torso
+    head.rotation.x = Math.PI // Inverted cone for angular look
+    head.castShadow = true
+    group.add(head)
 
-    // Right leg
-    const rightLeg = new THREE.Mesh(legGeo, mainMat)
-    rightLeg.position.set(0.4, H * 0.1, 0)
-    rightLeg.castShadow = true
-    group.add(rightLeg)
+    // === SHOULDER SPHERES - at sides of torso top ===
+    const shoulderGeo = new THREE.SphereGeometry(0.375, 12, 8)
+    const leftShoulder = new THREE.Mesh(shoulderGeo, mainMat)
+    leftShoulder.position.set(-0.54, H * 0.42, 0) // Lowered with torso
+    leftShoulder.castShadow = true
+    group.add(leftShoulder)
+
+    const rightShoulder = new THREE.Mesh(shoulderGeo, mainMat)
+    rightShoulder.position.set(0.54, H * 0.42, 0)
+    rightShoulder.castShadow = true
+    group.add(rightShoulder)
+
+    // === THIN CONE ARMS - pointing down and outward like /O\ ===
+    // Use scale.y = -1 to flip cone (tip down), rotation.z for outward tilt
+    const armTilt = 0.4 // ~17 degrees outward from vertical
+    const armLength = H * 0.5
+    const armBladeGeo = new THREE.ConeGeometry(0.15, armLength, 8)
+
+    // Left arm: flip with scale, tilt outward left
+    const leftArmBlade = new THREE.Mesh(armBladeGeo, mainMat)
+    leftArmBlade.position.set(1.2, 2, 0)
+    leftArmBlade.scale.y = -1 // Flip cone so tip points down
+    leftArmBlade.rotation.z = armTilt // Tilt outward (left)
+    leftArmBlade.castShadow = true
+    group.add(leftArmBlade)
+
+    // Right arm: flip with scale, tilt outward right
+    const rightArmBlade = new THREE.Mesh(armBladeGeo, mainMat)
+    rightArmBlade.position.set(-1.2, 2, 0)
+    rightArmBlade.scale.y = -1 // Flip cone so tip points down
+    rightArmBlade.rotation.z = -armTilt // Tilt outward (right)
+    rightArmBlade.castShadow = true
+    group.add(rightArmBlade)
+
+    // === CYLINDRICAL MOTORS behind shoulders ===
+    const motorGeo = new THREE.CylinderGeometry(0.35, 0.35, H * 0.1, 12)
+    const leftMotor = new THREE.Mesh(motorGeo, accentMat)
+    leftMotor.position.set(-0.7, H * 0.47, -0.5) // Lowered with torso
+    leftMotor.castShadow = true
+    group.add(leftMotor)
+
+    const rightMotor = new THREE.Mesh(motorGeo, accentMat)
+    rightMotor.position.set(0.7, H * 0.47, -0.5)
+    rightMotor.castShadow = true
+    group.add(rightMotor)
+
+    // === PROPELLERS on top of motors ===
+    const propGeo = new THREE.BoxGeometry(0.8, 0.05, 0.15)
+    const leftProp1 = new THREE.Mesh(propGeo, mainMat)
+    leftProp1.position.set(-0.7, H * 0.53, -0.5) // Lowered with torso
+    group.add(leftProp1)
+    const leftProp2 = new THREE.Mesh(propGeo, mainMat)
+    leftProp2.position.set(-0.7, H * 0.53, -0.5)
+    leftProp2.rotation.y = Math.PI / 2
+    group.add(leftProp2)
+
+    const rightProp1 = new THREE.Mesh(propGeo, mainMat)
+    rightProp1.position.set(0.7, H * 0.53, -0.5)
+    group.add(rightProp1)
+    const rightProp2 = new THREE.Mesh(propGeo, mainMat)
+    rightProp2.position.set(0.7, H * 0.53, -0.5)
+    rightProp2.rotation.y = Math.PI / 2
+    group.add(rightProp2)
+
+    // === VERTICAL CYLINDER (sword) suspended from back ===
+    const backSwordGeo = new THREE.CylinderGeometry(0.12, 0.12, H * 0.35, 8)
+    const backSword = new THREE.Mesh(backSwordGeo, mainMat)
+    backSword.position.set(0, H * 0.47, -0.5) // Lowered with torso
+    backSword.castShadow = true
+    group.add(backSword)
+
+    // Sword tip
+    const swordTipGeo = new THREE.ConeGeometry(0.12, H * 0.08, 8)
+    const swordTip = new THREE.Mesh(swordTipGeo, accentMat)
+    swordTip.position.set(0, H * 0.69, -0.5) // Lowered with torso
+    swordTip.castShadow = true
+    group.add(swordTip)
+
+    // === LEGS with talon blades ===
+    // Upper legs
+    const upperLegGeo = new THREE.CylinderGeometry(0.2, 0.25, H * 0.15, 8)
+    const leftUpperLeg = new THREE.Mesh(upperLegGeo, mainMat)
+    leftUpperLeg.position.set(-0.3, H * 0.22, 0)
+    leftUpperLeg.castShadow = true
+    group.add(leftUpperLeg)
+
+    const rightUpperLeg = new THREE.Mesh(upperLegGeo, mainMat)
+    rightUpperLeg.position.set(0.3, H * 0.22, 0)
+    rightUpperLeg.castShadow = true
+    group.add(rightUpperLeg)
+
+    // Lower legs
+    const lowerLegGeo = new THREE.CylinderGeometry(0.15, 0.2, H * 0.15, 8)
+    const leftLowerLeg = new THREE.Mesh(lowerLegGeo, mainMat)
+    leftLowerLeg.position.set(-0.3, H * 0.08, 0)
+    leftLowerLeg.castShadow = true
+    group.add(leftLowerLeg)
+
+    const rightLowerLeg = new THREE.Mesh(lowerLegGeo, mainMat)
+    rightLowerLeg.position.set(0.3, H * 0.08, 0)
+    rightLowerLeg.castShadow = true
+    group.add(rightLowerLeg)
+
+    // Talon blades extending from legs - pointing nearly fully upward
+    const talonGeo = new THREE.ConeGeometry(0.1, H * 0.25, 6)
+    const leftTalon = new THREE.Mesh(talonGeo, accentMat)
+    leftTalon.position.set(-0.55, H * 0.2, 0)
+    leftTalon.rotation.z = 0.25 // Nearly vertical, slight outward tilt
+    leftTalon.castShadow = true
+    group.add(leftTalon)
+
+    const rightTalon = new THREE.Mesh(talonGeo, accentMat)
+    rightTalon.position.set(0.55, H * 0.2, 0)
+    rightTalon.rotation.z = -0.25
+    rightTalon.castShadow = true
+    group.add(rightTalon)
+
+    // Feet
+    const footGeo = new THREE.BoxGeometry(0.25, 0.08, 0.4)
+    const leftFoot = new THREE.Mesh(footGeo, accentMat)
+    leftFoot.position.set(-0.3, 0.04, 0.05)
+    group.add(leftFoot)
+
+    const rightFoot = new THREE.Mesh(footGeo, accentMat)
+    rightFoot.position.set(0.3, 0.04, 0.05)
+    group.add(rightFoot)
 
     group.visible = false
     this.scene.add(group)
