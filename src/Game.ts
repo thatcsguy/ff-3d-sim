@@ -14,6 +14,8 @@ import { NumberSpriteManager } from './NumberSpriteManager'
 import { ResultOverlay } from './ResultOverlay'
 import { StartPrompt } from './StartPrompt'
 import { ChakramManager } from './ChakramManager'
+import { BuffManager } from './BuffManager'
+import { AbilitySystem } from './AbilitySystem'
 
 type GameState = 'waiting' | 'playing' | 'failed' | 'clear'
 
@@ -38,6 +40,8 @@ export class Game {
   private resultOverlay: ResultOverlay
   private startPrompt: StartPrompt
   private chakramManager: ChakramManager
+  private buffManager: BuffManager
+  private abilitySystem: AbilitySystem
   private gameState: GameState = 'waiting'
   // Time to wait after all AoEs resolve before declaring success (seconds)
   private readonly successDelayAfterLastAoE: number = 0.5
@@ -106,8 +110,12 @@ export class Game {
     this.playerMesh.castShadow = true
     this.scene.add(this.playerMesh)
 
+    // Buff and ability system setup
+    this.buffManager = new BuffManager()
+    this.abilitySystem = new AbilitySystem(this.buffManager, 'player')
+
     // Player controller setup (must be after playerMesh is created)
-    this.playerController = new PlayerController(this.playerMesh, this.inputManager)
+    this.playerController = new PlayerController(this.playerMesh, this.inputManager, this.buffManager)
 
     // NPC manager setup
     this.npcManager = new NPCManager(this.arena)
@@ -1002,6 +1010,15 @@ export class Game {
         this.restart()
       }
     }
+    // Ability hotkeys (only while playing)
+    if (this.gameState === 'playing') {
+      if (event.key === '1') {
+        this.abilitySystem.use('arms-length')
+      }
+      if (event.key === '2') {
+        this.abilitySystem.use('sprint')
+      }
+    }
   }
 
   /**
@@ -1053,6 +1070,10 @@ export class Game {
     this.npcManager.setScriptedMode(false)
     this.npcManager.clearScriptedPositions()
 
+    // Reset ability cooldowns and clear player buffs/debuffs
+    this.abilitySystem.reset()
+    this.buffManager.clearEntity('player')
+
     // Re-setup timeline (don't start yet - will assign new random number)
     this.setupTestTimeline()
 
@@ -1102,6 +1123,10 @@ export class Game {
   }
 
   private update(deltaTime: number): void {
+    // Update ability cooldowns and buff durations
+    this.abilitySystem.update(deltaTime)
+    this.buffManager.update(deltaTime)
+
     // Update player movement
     this.playerController.update(deltaTime, this.cameraController)
 
@@ -1178,6 +1203,8 @@ export class Game {
     this.numberSpriteManager.dispose()
     this.resultOverlay.dispose()
     this.startPrompt.dispose()
+    this.abilitySystem.dispose()
+    this.buffManager.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
     this.arena.dispose()

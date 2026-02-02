@@ -2,20 +2,24 @@ import * as THREE from 'three'
 import { InputManager, MouseButton } from './InputManager'
 import { CameraController } from './CameraController'
 import { PLAYER_SPEED, PLAYER_HEIGHT } from './constants'
+import { BuffManager } from './BuffManager'
 
 const JUMP_VELOCITY = 8 // meters per second initial upward velocity
 const GRAVITY = 20 // meters per second squared
+const SPRINT_SPEED_MULTIPLIER = 1.3 // +30% movement speed
 
 export class PlayerController {
   private mesh: THREE.Mesh
   private inputManager: InputManager
+  private buffManager: BuffManager | null
   private velocity: THREE.Vector3 = new THREE.Vector3()
   private isJumping: boolean = false
   private jumpHorizontalVelocity: THREE.Vector3 = new THREE.Vector3()
 
-  constructor(mesh: THREE.Mesh, inputManager: InputManager) {
+  constructor(mesh: THREE.Mesh, inputManager: InputManager, buffManager?: BuffManager) {
     this.mesh = mesh
     this.inputManager = inputManager
+    this.buffManager = buffManager ?? null
   }
 
   update(deltaTime: number, cameraController: CameraController): void {
@@ -59,10 +63,14 @@ export class PlayerController {
     const inputHorizontalVelocity = new THREE.Vector3()
     if (moveDirection.lengthSq() > 0) {
       moveDirection.normalize()
+      // Apply Sprint speed modifier if buff is active
+      const hasSprint = this.buffManager?.has('player', 'sprint') ?? false
+      const speedMultiplier = hasSprint ? SPRINT_SPEED_MULTIPLIER : 1.0
+      const currentSpeed = PLAYER_SPEED * speedMultiplier
       inputHorizontalVelocity.set(
-        moveDirection.x * PLAYER_SPEED,
+        moveDirection.x * currentSpeed,
         0,
-        moveDirection.z * PLAYER_SPEED
+        moveDirection.z * currentSpeed
       )
     }
 
