@@ -16,6 +16,7 @@ import { StartPrompt } from './StartPrompt'
 import { ChakramManager } from './ChakramManager'
 import { BuffManager } from './BuffManager'
 import { AbilitySystem } from './AbilitySystem'
+import { Hotbar } from './Hotbar'
 
 type GameState = 'waiting' | 'playing' | 'failed' | 'clear'
 
@@ -42,6 +43,7 @@ export class Game {
   private chakramManager: ChakramManager
   private buffManager: BuffManager
   private abilitySystem: AbilitySystem
+  private hotbar: Hotbar
   private gameState: GameState = 'waiting'
   // Time to wait after all AoEs resolve before declaring success (seconds)
   private readonly successDelayAfterLastAoE: number = 0.5
@@ -113,6 +115,7 @@ export class Game {
     // Buff and ability system setup
     this.buffManager = new BuffManager()
     this.abilitySystem = new AbilitySystem(this.buffManager, 'player')
+    this.hotbar = new Hotbar(this.abilitySystem)
 
     // Player controller setup (must be after playerMesh is created)
     this.playerController = new PlayerController(this.playerMesh, this.inputManager, this.buffManager)
@@ -1180,6 +1183,9 @@ export class Game {
 
     // Update HUD
     this.hud.update(this.playerMesh.position)
+
+    // Update hotbar
+    this.hotbar.update()
   }
 
   start(): void {
@@ -1205,6 +1211,7 @@ export class Game {
     this.startPrompt.dispose()
     this.abilitySystem.dispose()
     this.buffManager.dispose()
+    this.hotbar.dispose()
     this.cameraController.dispose()
     this.inputManager.dispose()
     this.arena.dispose()
