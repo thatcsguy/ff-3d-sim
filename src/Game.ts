@@ -485,7 +485,7 @@ export class Game {
       id: coneId,
       shape: 'cone',
       position: ccPosition,
-      radius: 5,
+      radius: ARENA_RADIUS * 2, // Diameter of arena
       angle: Math.PI / 2, // 90°
       rotation: coneRotation,
       telegraphDuration: 0.5,
@@ -563,7 +563,9 @@ export class Game {
       id: 'chakrams-spawn',
       time: 2.0,
       handler: () => {
-        const travelTime = 2.0
+        // Match CC dash speed: ~45.75 units in 0.25s = 183 units/sec
+        // Chakrams travel 2 * ARENA_RADIUS = 36.6 units, so 0.2s
+        const travelTime = 0.2
         const chakramRadius = 1.2
         const hitRadius = 2.5
 
@@ -667,6 +669,29 @@ export class Game {
       handler: () => {
         this.chakramManager.startMovement('chakram-east')
         this.chakramManager.startMovement('chakram-south')
+
+        // Line AoEs for chakram paths (like CC dashes)
+        // East chakram travels along X axis (rotation = π/2 from +Z)
+        this.aoeManager.spawn({
+          id: 'chakram-east-line',
+          shape: 'line',
+          position: new THREE.Vector3(0, 0, 0),
+          length: ARENA_RADIUS * 2,
+          width: 5,
+          rotation: Math.PI / 2,
+          telegraphDuration: 0.2,
+        })
+
+        // South chakram travels along Z axis (rotation = 0)
+        this.aoeManager.spawn({
+          id: 'chakram-south-line',
+          shape: 'line',
+          position: new THREE.Vector3(0, 0, 0),
+          length: ARENA_RADIUS * 2,
+          width: 5,
+          rotation: 0,
+          telegraphDuration: 0.2,
+        })
       },
     })
 
@@ -822,9 +847,7 @@ export class Game {
       time: 21.0,
       handler: () => {
         const positions = this.getAllPartyPositions()
-        this.aoeManager.checkPuddleSoak('puddle-west', positions)
-        this.aoeManager.checkPuddleSoak('puddle-east', positions)
-        // Apply debuff if player is inside a puddle
+        if (!this.checkPuddlesSoaked(positions)) return
         this.checkPlayerPuddleDebuff()
       },
     })
@@ -835,8 +858,8 @@ export class Game {
       time: 22.0,
       handler: () => {
         // Respawn puddles at 65% radius (shrink by 35%)
-        this.aoeManager.respawnPuddle('puddle-west', puddleRadius * 0.65, 999)
-        this.aoeManager.respawnPuddle('puddle-east', puddleRadius * 0.65, 999)
+        this.aoeManager.respawnPuddle('puddle-west', 6, 999)
+        this.aoeManager.respawnPuddle('puddle-east', 6, 999)
 
         // CC dashes to #4 (line AoE + boss movement)
         const ccPos = this.bossManager.getPosition('cruiseChaser')!
@@ -897,9 +920,7 @@ export class Game {
       time: 25.0,
       handler: () => {
         const positions = this.getAllPartyPositions()
-        this.aoeManager.checkPuddleSoak('puddle-west', positions)
-        this.aoeManager.checkPuddleSoak('puddle-east', positions)
-        // Apply debuff if player is inside a puddle
+        if (!this.checkPuddlesSoaked(positions)) return
         this.checkPlayerPuddleDebuff()
 
         // Players 3 & 4 move to puddle positions
@@ -914,8 +935,8 @@ export class Game {
       time: 26.0,
       handler: () => {
         // Respawn puddles at ~42% radius (shrink by 35% again)
-        this.aoeManager.respawnPuddle('puddle-west', puddleRadius * 0.65 * 0.65, 999)
-        this.aoeManager.respawnPuddle('puddle-east', puddleRadius * 0.65 * 0.65, 999)
+        this.aoeManager.respawnPuddle('puddle-west', 3, 999)
+        this.aoeManager.respawnPuddle('puddle-east', 3, 999)
 
         // CC dashes to #6 (line AoE + boss movement)
         const ccPos = this.bossManager.getPosition('cruiseChaser')!
@@ -972,9 +993,7 @@ export class Game {
       time: 29.0,
       handler: () => {
         const positions = this.getAllPartyPositions()
-        this.aoeManager.checkPuddleSoak('puddle-west', positions)
-        this.aoeManager.checkPuddleSoak('puddle-east', positions)
-        // Apply debuff if player is inside a puddle
+        if (!this.checkPuddlesSoaked(positions)) return
         this.checkPlayerPuddleDebuff()
 
         // Remove puddles after final check
@@ -1119,17 +1138,38 @@ export class Game {
 
   /**
    * Apply debuffs when player is hit by AoEs.
-   * Cruise Chaser attacks (cc-cone, cc-dash, bj-cone) apply Magic Vuln + Physical Vuln.
-   * Other boss attacks also apply both vulnerability debuffs.
+   * Checks for lethal failure conditions before applying debuffs.
    */
   private applyAoEDebuffs(hitIds: string[]): void {
     for (const id of hitIds) {
-      // All Cruise Chaser and Brute Justice attacks apply vulnerability debuffs
-      if (
-        id.startsWith('cc-') ||
-        id.startsWith('bj-') ||
-        id === 'ap-plus'
-      ) {
+      // Brute Justice cone is always lethal
+      if (id.startsWith('bj-cone')) {
+        this.triggerFailure("Hit by Brute Justice's Double Rocket Punch. This attack cannot be survived.")
+        return
+      }
+
+      // Alexander Prime plus is always lethal
+      if (id === 'ap-plus') {
+        this.triggerFailure("Hit by Alexander Prime's Sacrament. This attack cannot be survived.")
+        return
+      }
+
+      // Cruise Chaser attacks have conditional lethality
+      if (id.startsWith('cc-')) {
+        const hasPhysVuln = this.buffManager.has('player', 'physical-vuln')
+        const hasArmsLength = this.buffManager.has('player', 'arms-length')
+
+        if (hasPhysVuln) {
+          this.triggerFailure('Hit by Cruise Chaser while Physical Vulnerability was active. The second hit is lethal.')
+          return
+        }
+
+        if (!hasArmsLength) {
+          this.triggerFailure("Hit by Cruise Chaser without Arm's Length active. Use Arm's Length to survive the knockback.")
+          return
+        }
+
+        // Survived - apply debuffs
         this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
         this.buffManager.apply('player', DEBUFFS.PHYSICAL_VULN)
       }
@@ -1137,19 +1177,37 @@ export class Game {
   }
 
   /**
-   * Apply debuffs when player is hit by chakrams.
-   * Chakrams apply Magic Vuln + Physical Vuln.
+   * Check for chakram hits - being hit by a chakram is lethal.
    */
   private applyChakramDebuffs(hitIds: string[]): void {
-    for (const _id of hitIds) {
-      this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
-      this.buffManager.apply('player', DEBUFFS.PHYSICAL_VULN)
+    if (hitIds.length > 0) {
+      this.triggerFailure('Hit by Super Chakram. This attack cannot be survived.')
     }
+  }
+
+  /**
+   * Check that both puddles are soaked. Triggers failure if either puddle has no one inside.
+   * @returns true if both puddles were soaked, false if failure was triggered
+   */
+  private checkPuddlesSoaked(positions: THREE.Vector3[]): boolean {
+    const westSoaked = this.aoeManager.checkPuddleSoak('puddle-west', positions)
+    const eastSoaked = this.aoeManager.checkPuddleSoak('puddle-east', positions)
+
+    if (!westSoaked) {
+      this.triggerFailure('West puddle was not soaked. Each puddle requires one person inside when it triggers.')
+      return false
+    }
+    if (!eastSoaked) {
+      this.triggerFailure('East puddle was not soaked. Each puddle requires one person inside when it triggers.')
+      return false
+    }
+    return true
   }
 
   /**
    * Check if player is inside a puddle at soak time and apply debuffs.
    * Applies Magic Vuln (10s) + Vulnerability Up (3s) if player is in puddle.
+   * If player already has Magic Vulnerability, being in a puddle is lethal.
    */
   private checkPlayerPuddleDebuff(): void {
     const playerPos = [this.playerMesh.position]
@@ -1157,21 +1215,25 @@ export class Game {
     const inEast = this.aoeManager.checkPuddleSoak('puddle-east', playerPos)
 
     if (inWest || inEast) {
+      const hasMagicVuln = this.buffManager.has('player', 'magic-vuln')
+      if (hasMagicVuln) {
+        this.triggerFailure('Caught in puddle explosion while Magic Vulnerability was active. Only soak one puddle per set.')
+        return
+      }
       this.buffManager.apply('player', DEBUFFS.MAGIC_VULN)
       this.buffManager.apply('player', DEBUFFS.VULN_UP)
     }
   }
 
   /**
-   * Trigger failure state when player is hit by an AoE.
-   * Currently unused - damage doesn't end encounter for now.
+   * Trigger failure state when player is hit by a lethal mechanic.
+   * @param reason Explanation of why the player failed
    */
-  // @ts-ignore: Intentionally unused - will be connected when failure logic is enabled
-  private triggerFailure(): void {
+  private triggerFailure(reason: string): void {
     if (this.gameState !== 'playing') return
     this.gameState = 'failed'
     this.timeline.stop()
-    this.resultOverlay.show('failed')
+    this.resultOverlay.show('failed', reason)
   }
 
   /**

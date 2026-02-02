@@ -8,6 +8,7 @@ export type ResultType = 'failed' | 'clear'
 export class ResultOverlay {
   private container: HTMLDivElement
   private resultText: HTMLDivElement
+  private reasonText: HTMLDivElement
   private promptText: HTMLDivElement
   private isVisible: boolean = false
 
@@ -37,6 +38,16 @@ export class ResultOverlay {
     this.resultText.style.marginBottom = '24px'
     this.container.appendChild(this.resultText)
 
+    // Failure reason text
+    this.reasonText = document.createElement('div')
+    this.reasonText.style.fontSize = '24px'
+    this.reasonText.style.fontFamily = 'sans-serif'
+    this.reasonText.style.color = '#ffaaaa'
+    this.reasonText.style.marginBottom = '24px'
+    this.reasonText.style.textAlign = 'center'
+    this.reasonText.style.maxWidth = '600px'
+    this.container.appendChild(this.reasonText)
+
     // Restart prompt text
     this.promptText = document.createElement('div')
     this.promptText.style.fontSize = '24px'
@@ -51,14 +62,19 @@ export class ResultOverlay {
 
   /**
    * Show the result overlay with the specified result type.
+   * @param result The result type (failed or clear)
+   * @param reason Optional explanation for failure
    */
-  show(result: ResultType): void {
+  show(result: ResultType, reason?: string): void {
     if (result === 'failed') {
       this.resultText.textContent = 'FAILED'
       this.resultText.style.color = '#ff4444'
+      this.reasonText.textContent = reason || ''
+      this.reasonText.style.display = reason ? 'block' : 'none'
     } else {
       this.resultText.textContent = 'CLEAR!'
       this.resultText.style.color = '#44ff44'
+      this.reasonText.style.display = 'none'
     }
 
     this.container.style.display = 'flex'
