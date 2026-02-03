@@ -29,13 +29,13 @@ export const ABILITIES = {
     name: "Arm's Length",
     cooldown: 120,
     hotkey: '1',
-    iconUrl: '/icons/arms-length-action.png',
+    iconUrl: 'icons/arms-length-action.png',
     buff: {
       id: 'arms-length',
       name: "Arm's Length",
       type: 'buff' as const,
       duration: 6,
-      iconUrl: '/icons/arms-length-buff.png',
+      iconUrl: 'icons/arms-length-buff.png',
     },
   },
   SPRINT: {
@@ -43,13 +43,13 @@ export const ABILITIES = {
     name: 'Sprint',
     cooldown: 60,
     hotkey: '2',
-    iconUrl: '/icons/sprint-action.png',
+    iconUrl: 'icons/sprint-action.png',
     buff: {
       id: 'sprint',
       name: 'Sprint',
       type: 'buff' as const,
       duration: 10,
-      iconUrl: '/icons/sprint-buff.png',
+      iconUrl: 'icons/sprint-buff.png',
     },
   },
 } as const

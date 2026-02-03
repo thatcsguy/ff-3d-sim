@@ -24,7 +24,7 @@ export class Arena {
       uvAttribute.setXY(i, (u - 0.5) * uvScale + 0.5, (v - 0.5) * uvScale + 0.5)
     }
 
-    const texture = this.textureLoader.load('/textures/arena-floor.jpg')
+    const texture = this.textureLoader.load('textures/arena-floor.jpg')
     texture.colorSpace = THREE.SRGBColorSpace
 
     const material = new THREE.MeshStandardMaterial({

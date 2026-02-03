@@ -32,21 +32,21 @@ const DEBUFFS = {
     name: 'Magic Vulnerability Up',
     type: 'debuff',
     duration: 10,
-    iconUrl: '/icons/magic-vuln.png',
+    iconUrl: 'icons/magic-vuln.png',
   } as StatusEffectConfig,
   PHYSICAL_VULN: {
     id: 'physical-vuln',
     name: 'Physical Vulnerability Up',
     type: 'debuff',
     duration: 17,
-    iconUrl: '/icons/physical-vuln.png',
+    iconUrl: 'icons/physical-vuln.png',
   } as StatusEffectConfig,
   VULN_UP: {
     id: 'vuln-up',
     name: 'Vulnerability Up',
     type: 'debuff',
     duration: 3,
-    iconUrl: '/icons/vuln-up.png',
+    iconUrl: 'icons/vuln-up.png',
   } as StatusEffectConfig,
 }
 
